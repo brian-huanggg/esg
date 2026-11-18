@@ -24,10 +24,13 @@ func TestHealthRoutes(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			rec := httptest.NewRecorder()
 
-			newMux().ServeHTTP(rec, req)
+			newHandler().ServeHTTP(rec, req)
 
 			if rec.Code != tt.wantStatus {
 				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
+			}
+			if rec.Header().Get("X-Request-ID") == "" {
+				t.Error("missing X-Request-Id header")
 			}
 			if tt.wantBody == "" {
 				return
