@@ -7,12 +7,20 @@ import (
 )
 
 func main() {
-	mux := http.NewServeMux()
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
 
-	mux.HandleFunc("GET /api/health", handleHealth)
-
+func run() error {
 	log.Println("listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	return http.ListenAndServe(":8080", newMux())
+}
+
+func newMux() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/health", handleHealth)
+	return mux
 }
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {

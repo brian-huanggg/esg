@@ -1,0 +1,6 @@
+.PHONY: test cover
+
+test:
+	cd backend && go test ./...
+cover:
+	cd backend && go test -cover ./...
