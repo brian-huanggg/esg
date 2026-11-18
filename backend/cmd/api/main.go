@@ -1,9 +1,11 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
+
+	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared"
+	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared/api"
 )
 
 func main() {
@@ -19,14 +21,7 @@ func run() error {
 
 func newMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/health", handleHealth)
+	strict := api.NewStrictHandler(&shared.HealthHandler{}, nil)
+	api.HandlerFromMux(strict, mux)
 	return mux
-}
-
-func handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
-		log.Printf("encode health response: %v", err)
-	}
 }
