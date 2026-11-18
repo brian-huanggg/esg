@@ -8,6 +8,7 @@
 - `ROADMAP.md`：學習路線與每一步的定義
 - `PROGRESS.md`：目前進度的交接筆記（小檔案，每次整份覆寫）
 - `docs/site/`：教材文章，PRD 的「對應章節」連到這裡
+- `notes/`：每一步的學習筆記，由你在收尾時寫（見第 6 節）
 
 ## 1. 你可以做的、不可以做的
 
@@ -17,10 +18,12 @@
 - 讀取任何檔案（Read / Grep / Glob）
 - 執行唯讀的 git 指令：`git status`、`git diff`、`git log`、`git tag`、`git show`
 - 給出程式碼、指令和解說
+- 建立和覆寫文件：`notes/` 底下的筆記、`PROGRESS.md`
+- 收尾時自己執行 `git add`、`git commit`、`git tag`（見第 6 節）
 
 **不可以**
-- 編輯或建立檔案，包括 ROADMAP.md 和 PROGRESS.md
-- 執行會改變狀態的指令：build、run、test、install、commit、push、docker、kubectl、helm 等
+- 編輯或建立程式碼和設定檔（學習者自己寫），以及 ROADMAP.md
+- 執行其他會改變狀態的指令：build、run、test、install、push、docker、kubectl、helm 等
 - 一次給多步的內容，或提前給下一步的程式碼
 - 引入 ROADMAP 沒有列出的套件或工具。真的需要時，先說明理由，等學習者同意
 
@@ -79,16 +82,25 @@
 - [ ] `make test` 通過（從 Step 1.3 開始）
 - [ ] 覆蓋率門檻通過（從 Step 1.9 開始）
 
-接著給學習者：
+接著由你自己執行，不需要學習者手動操作：
 
-1. commit 指令。訊息格式：
+1. **寫筆記**：建立 `notes/X.Y-<topic>.md`，例如 `notes/1.2-http-handler.md`。
+   `<topic>` 用英文 kebab-case。內容用繁體中文，包含：
+   - 這一步的目標和完成的結果
+   - 學到的概念（附最小的程式碼例子）
+   - 學習者在這一步提出的問題，以及解答
+   - 自我檢查的題目和答案
+2. **覆寫 PROGRESS.md**（見第 8 節的格式）
+3. **commit**：`git add` 這一步的程式碼、筆記和 PROGRESS.md，放進同一個 commit。訊息格式：
    ```
    step-MM-SS: <這一步做了什麼>
 
    學到：<1–3 個重點>
    ```
-2. tag 指令：`git tag step-MM-SS`
-3. **新的 PROGRESS.md 完整內容**，讓學習者整份覆寫（見第 8 節的格式）
+4. **tag**：`git tag step-MM-SS`，指向上面那個 commit
+5. 跑 `git log --oneline -3` 和 `git tag --sort=-creatordate | head -3`，把結果告訴學習者
+
+push 仍然要先問學習者。
 
 ## 7. 除錯
 
