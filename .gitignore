@@ -1,0 +1,20 @@
+# --- Secrets: a committed secret stays in history forever ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+kubeconfig
+.claude/settings.local.json
+
+# --- Build outputs: reproducible, so never versioned ---
+/bin/
+coverage.out
+node_modules/
+dist/
+
+# --- Editor / OS noise ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
