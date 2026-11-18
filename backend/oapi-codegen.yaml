@@ -1,0 +1,8 @@
+package: api
+# Relative to the directory where go:generate runs (internal/shared/api).
+output: api.gen.go
+generate:
+  models: true
+  std-http-server: true
+  # Strict mode makes handlers return typed responses instead of writing to http.ResponseWriter.
+  strict-server: true
