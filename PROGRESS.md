@@ -13,6 +13,5 @@
 - （無）
 
 ## 最近的注意事項（最多 3 條）
-- 新東西太多時，先給 pseudocode 再給程式碼，學習者比較好吸收
 - 洋蔥順序寫錯（Logging 在 RequestID 外面），目前沒有測試抓得到，要靠看伺服器 log 驗收
 - 要讓 log 帶 request_id，一定要用 `logger.InfoContext(ctx, ...)`，不是 `Info`
