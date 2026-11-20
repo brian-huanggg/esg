@@ -8,6 +8,10 @@
 - `ROADMAP.md`：學習路線與每一步的定義
 - `PROGRESS.md`：目前進度的交接筆記（小檔案，每次整份覆寫）
 - `notes/`：每一步的學習筆記，由你在收尾時寫（見第 6 節）
+  `notes/` 同時是 VitePress 專案（支線，不在 ROADMAP，已由學習者同意）：
+  `notes/package.json` 和 `notes/.vitepress/` 是網站設定，由學習者自己寫。
+  sidebar 由檔名自動產生，所以筆記檔名必須維持 `X.Y-<topic>.md`。
+  `notes/index.md` 是網站首頁，不是步驟筆記
 
 ## 1. 你可以做的、不可以做的
 
@@ -101,7 +105,11 @@
 接著由你自己執行，不需要學習者手動操作：
 
 1. **寫筆記**：建立 `notes/X.Y-<topic>.md`，例如 `notes/1.2-http-handler.md`。
-   `<topic>` 用英文 kebab-case。內容用繁體中文，包含：
+   `<topic>` 用英文 kebab-case。檔名不符合 `X.Y-` 開頭時不會出現在網站 sidebar。
+   內容會被 VitePress 渲染：尖括號（例如 `<topic>`）要放在行內程式碼或程式碼區塊裡，
+   否則會被當成 HTML 而導致 build 失敗。`{{ }}` 只有在程式碼區塊（fenced code block）裡才安全，
+   行內程式碼不行，必須改用程式碼區塊，或用 `<span v-pre>` 包起來，否則會被當成 Vue 語法。
+   內容用繁體中文，包含：
    - 這一步的目標和完成的結果
    - 學到的概念（附最小的程式碼例子）
    - 學習者在這一步提出的問題，以及解答

@@ -11,6 +11,7 @@ kubeconfig
 /bin/
 coverage.out
 node_modules/
+notes/.vitepress/cache/
 dist/
 
 # --- Editor / OS noise ---
