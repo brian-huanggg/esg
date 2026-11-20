@@ -4,7 +4,7 @@ COVER_MIN ?= 80
 COMPOSE = docker compose --env-file .env -f deploy/compose.yml
 
 run-backend:
-	cd backend && go run ./cmd/api
+	cd backend && set -a && . ../.env && set +a && go run ./cmd/api
 
 run-frontend:
 	cd frontend && npm run dev

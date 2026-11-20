@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"os"
@@ -20,6 +21,16 @@ func main() {
 }
 
 func run(logger *slog.Logger) error {
+	cfg, err := shared.LoadDBConfig()
+	if err != nil {
+		return err
+	}
+	db, err := shared.OpenDB(context.Background(), cfg)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
 	logger.Info("listening", "addr", ":8080")
 	return http.ListenAndServe(":8080", newHandler(logger))
 }
