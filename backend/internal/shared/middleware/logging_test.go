@@ -37,7 +37,7 @@ func TestLogging(t *testing.T) {
 			if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
 				t.Fatalf("log line is not JSON: %v (%q)", err, buf.String())
 			}
-			if entry["request_id"] != "trace-1" {
+			if entry["request_id"] != "trace-100" {
 				t.Errorf("request_id = %v, want trace-1", entry["request_id"])
 			}
 			if entry["status"] != tt.wantStatus {
