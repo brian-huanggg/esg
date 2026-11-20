@@ -1,7 +1,7 @@
 .PHONY: run-backend run-frontend test test-backend test-frontend gen gen-backend gen-frontend db-up db-down migrate-up migrate-down
 
 COVER_MIN ?= 80
-COMPOSE = docker compose --env-file .env -f deploy/compose.yml
+COMPOSE = docker compose --env-file .env -f deploy/compose.yaml
 MIGRATE = set -a && . ./.env && set +a && \
 	migrate -path backend/migrations \
 	-database "mysql://$$DB_USER:$$DB_PASSWORD@tcp(127.0.0.1:3306)/$$DB_NAME"

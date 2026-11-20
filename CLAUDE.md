@@ -87,7 +87,7 @@
   Go 都要自己寫。具體包括：
   - 在 `main.go` 手動建立並傳入依賴（constructor 接線），沒有 `@Autowired`
   - 手動註冊路由與 middleware，沒有 `@RequestMapping` 或 Filter 自動掃描
-  - 手動讀環境變數與組設定，沒有 `application.yml` 自動綁定
+  - 手動讀環境變數與組設定，沒有 `application.yaml` 自動綁定
   - 手動 `Scan` 欄位、手動管理交易（`Begin` / `Commit` / `Rollback`），沒有 `@Transactional`
   - 手動檢查 `error` 回傳值，沒有 exception 往上拋
   - 手寫 fake 做測試，沒有 Mockito
