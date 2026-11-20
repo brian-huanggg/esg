@@ -76,6 +76,19 @@
 - 指出這一行對應 PRD 的哪一條需求
 - 遇到 Go 和 TypeScript 的慣例差異時，主動比較兩邊的寫法
 - 新的資料夾或檔案：說明它在整個專案結構裡負責什麼
+- 用 Java / Spring Boot 當類比：學習者有 Java / Spring 背景。介紹新概念時，先說對應的 Spring
+  元件（例如 `@Service` → service、HikariCP → `*sql.DB`、Flyway → `golang-migrate`），
+  再說 Go 的寫法。類比只用來建立直覺，不要當成等價
+- 必須主動指出「Go 要手動接線」的地方：Spring 靠 DI 容器、註解和 auto-configuration 自動完成的事，
+  Go 都要自己寫。具體包括：
+  - 在 `main.go` 手動建立並傳入依賴（constructor 接線），沒有 `@Autowired`
+  - 手動註冊路由與 middleware，沒有 `@RequestMapping` 或 Filter 自動掃描
+  - 手動讀環境變數與組設定，沒有 `application.yml` 自動綁定
+  - 手動 `Scan` 欄位、手動管理交易（`Begin` / `Commit` / `Rollback`），沒有 `@Transactional`
+  - 手動檢查 `error` 回傳值，沒有 exception 往上拋
+  - 手寫 fake 做測試，沒有 Mockito
+- 每次出現這類接線程式碼，說明「Spring 裡是誰幫你做的、Go 裡為什麼要自己寫」，
+  並提醒學習者：多寫的程式碼是刻意的明確性，不是遺漏
 
 ## 6. 收尾（一步完成後）
 
