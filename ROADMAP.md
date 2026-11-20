@@ -123,11 +123,11 @@
 
 > 完成時：在瀏覽器用工號、姓名、密碼註冊。資料庫裡的密碼是 bcrypt 雜湊。重複工號會看到錯誤。
 >
-> 已決定：MariaDB 用 10.11 LTS；重複工號回 409；新增套件 `go-sql-driver/mysql`、
+> 已決定：MariaDB 用 11.4 LTS；重複工號回 409；新增套件 `go-sql-driver/mysql`、
 > `golang-migrate`、`testcontainers-go`、`golang.org/x/crypto/bcrypt`、`react-router` 都已核准。
 
 #### 2.1 compose 啟動 MariaDB
-- 目標：`make db-up` 起一個 MariaDB 10.11，能用 client 連進去執行 `SELECT 1`
+- 目標：`make db-up` 起一個 MariaDB 11.4，能用 client 連進去執行 `SELECT 1`
 - 新概念：docker compose、volume（資料持久化）、healthcheck、`.env` 與 `.env.example`（secret 不進 git）
 - 檔案：`deploy/compose.yaml`、`.env.example`、`Makefile`（`db-up` / `db-down`）
 - 行數：約 30
@@ -323,7 +323,7 @@
 
 | 項目 | 選項 | 何時決定 |
 |---|---|---|
-| MariaDB 版本 | 已決定：10.11 LTS（PRD 的 10.5 已 EOL） | 已決定 |
+| MariaDB 版本 | 已決定：11.4 LTS（PRD 的 10.5 已 EOL） | 已決定 |
 | GitHub 認證 | 在 devbox 設定 GitHub 的 HTTPS credential | M1.10 前 |
 | CI 怎麼 push image | GHCR，或在 devbox 架 self-hosted runner push 到 Harbor | M11 |
 | ArgoCD 怎麼讀 repo | 確認 k3s 能連到 github.com；私有 repo 需要 deploy key 或 token | M4 |
