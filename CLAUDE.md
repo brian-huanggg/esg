@@ -11,7 +11,9 @@
   `notes/` 同時是 VitePress 專案（支線，不在 ROADMAP，已由學習者同意）：
   `notes/package.json` 和 `notes/.vitepress/` 是網站設定，由學習者自己寫。
   sidebar 由檔名自動產生，所以筆記檔名必須維持 `X.Y-<topic>.md`。
-  `notes/index.md` 是網站首頁，不是步驟筆記
+  `notes/index.md` 是網站首頁，不是步驟筆記。
+  push 到 main 且改到 `notes/` 時，`.github/workflows/docs.yaml` 會自動部署到
+  `https://esg.knowledge-forest.online/`，所以 `base` 必須維持預設的 `/`
 
 ## 1. 你可以做的、不可以做的
 
