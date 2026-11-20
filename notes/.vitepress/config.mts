@@ -15,6 +15,7 @@ const items = readdirSync(notesDir)
     })
 
 export default defineConfig ({
+    base: '/esg/',
     title: 'Learning Notes',
     lang: 'zh-TW',
     themeConfig: {
