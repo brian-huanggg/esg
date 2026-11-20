@@ -98,112 +98,120 @@
 
 ---
 
-## M1 Walking Skeleton：前後端打通
+## M1 Walking Skeleton：前後端打通（已完成）
 
-> 完成時：瀏覽器打開前端頁面，畫面顯示後端 `/api/health` 的回應。
-> 後端的每一行 log 都是 JSON 並帶 request-id，`make test` 會檢查覆蓋率門檻，
-> push 到 GitHub 時 CI 會自動跑測試。
+> 完成時：瀏覽器顯示後端 `/api/health` 的回應。後端 log 是帶 request-id 的 JSON，
+> `make test` 檢查覆蓋率門檻，push 時 CI 自動跑測試。
+> 每一步的細節看 `notes/1.X-*.md` 和 tag `step-01-01`～`step-01-10`。
 
-#### 1.1 第一個 Go 程式
-- 目標：`go run ./cmd/api` 印出一行文字
-- 新概念：module、package、`main` 函式、`go.mod`
-- 檔案：`backend/go.mod`、`backend/cmd/api/main.go`
-- 行數：約 10
-- 驗收：終端機印出 `hello esg`
-- 對應：無（暖身）
-
-#### 1.2 手寫一個 HTTP handler（暖身用，下一步會換掉）
-- 目標：`curl localhost:8080/api/health` 回傳 `{"status":"ok"}`
-- 新概念：`net/http`、handler、`ServeMux` 的路由寫法、JSON encoding、status code
-- 檔案：修改 `main.go`
-- 行數：約 30
-- 驗收：curl 拿到 JSON，`curl -i` 看到 `200` 和 `Content-Type: application/json`
-- 對應：後端 2.5
-
-#### 1.3 第一個測試與 Makefile
-- 目標：`make test` 跑過 health handler 的測試
-- 新概念：`_test.go`、`httptest`、table-driven test、把 `main` 縮到最小（只呼叫 `run()`）
-  讓程式容易測試、Makefile 的 target
-- 檔案：`backend/cmd/api/main_test.go`、`Makefile`
-- 行數：約 40
-- 驗收：`make test` 顯示 PASS，`make cover` 印出覆蓋率
-- 對應：PRD「後端測試覆蓋率 >= 80%」；測試 3.4
-
-#### 1.4 規格先行：寫出 health 的 OpenAPI 規格
-- 目標：`api/openapi.yaml` 描述 `GET /api/health`，並且能產生 Go 程式碼
-- 新概念：OpenAPI 的 paths / schemas / responses、規格先行的意義、
-  `go get -tool` 管理 oapi-codegen、`go generate`
-- 檔案：`api/openapi.yaml`、`backend/oapi-codegen.yaml`、`backend/internal/shared/api/gen.go`
-- 行數：約 50
-- 驗收：`make gen` 產生 `api.gen.go`，build 成功
-- 對應：PRD「oapi-codegen、建立 API-Spec」；後端 2.5「規格先行與程式碼生成」
-
-#### 1.5 用產生的介面取代手寫 handler
-- 目標：health 改成實作 strict server 介面，行為和 1.2 一樣
-- 新概念：Go 的 interface、為什麼 generated code 不要手改、編譯器怎麼幫你檢查規格和實作一致
-- 檔案：新增 `backend/internal/shared/health.go`，修改 `main.go` 和測試
-- 行數：約 50
-- 驗收：`make test` 通過，curl 的結果和 1.2 相同
-- 對應：同 1.4
-
-#### 1.6 JSON log 與 request-id middleware
-- 目標：每個請求都有 request-id，回應 header 帶 `X-Request-Id`，每一行 log 都是帶 request-id 的 JSON
-- 新概念：middleware 的洋蔥模型、`context.Context`、`log/slog`、
-  request-id 從哪來（沿用 header 或新產生）
-- 檔案：`backend/internal/shared/middleware/requestid.go`、`.../logging.go` 與對應測試
-- 行數：約 80
-- 驗收：curl 兩次，兩次的 request-id 不同；log 是 JSON 且有 `request_id` 欄位；測試通過
-- 對應：PRD「Structured Logging」；後端 2.8「結構化日誌與 correlation ID」
-
-#### 1.7 建立 React 專案並看懂結構
-- 目標：`npm run dev` 打開 Vite 的預設頁面，然後清成只剩一個標題
-- 新概念：npm 與 `package.json`、Vite、JSX/TSX、component、`index.html` → `main.tsx` → `App.tsx`
-  的載入順序
-- 檔案：Vite 產生的檔案，清理 `App.tsx`
-- 行數：約 20（自己寫的部分）
-- 驗收：瀏覽器顯示「ESG Idea Contest」
-- 對應：前端領域
-
-#### 1.8 前端呼叫後端：同源 proxy 與型別化的 client
-- 目標：頁面顯示 `Backend: ok`，資料來自後端
-- 新概念：同源政策（same-origin）、Vite dev proxy、openapi-typescript 從同一份 spec 產生型別、
-  `useEffect` 與 `useState`、loading / error 狀態
-- 檔案：`frontend/vite.config.ts`、`frontend/src/api/client.ts`、修改 `App.tsx`、`Makefile`（gen 目標）
-- 行數：約 60
-- 驗收：前後端都啟動後，畫面顯示 ok；把後端關掉，畫面顯示錯誤狀態
-- 對應：PRD「前後端同源 不需要 CORS」；[同源政策]、[CORS]
-
-#### 1.9 前端測試與覆蓋率門檻
-- 目標：`make test` 同時跑前後端測試，後端覆蓋率低於 80% 時失敗
-- 新概念：Vitest、Testing Library 的「用使用者的角度測」、mock fetch、
-  覆蓋率門檻的計算方式（排除 generated code）
-- 檔案：`frontend/src/App.test.tsx`、修改 `Makefile`
-- 行數：約 50
-- 驗收：測試通過；故意刪掉一個測試，看到門檻擋下來
-- 對應：測試 3.4「在 CI 強制覆蓋率門檻」
-
-#### 1.10 第一條 GitHub Actions CI
-- 目標：push 到 GitHub 後，CI 自動跑 gen 檢查、後端測試、覆蓋率門檻、前端測試與 build
-- 新概念：workflow / job / step、`actions/setup-go` 與 cache、
-  為什麼 CI 要檢查「generated code 是否和 spec 一致」
-- 檔案：`.github/workflows/ci.yaml`
-- 行數：約 60
-- 驗收：GitHub 的 Actions 頁面顯示綠勾；故意讓一個測試失敗，看到紅叉
-- 對應：PRD「CI Pipeline」（安全掃描放在 M11）
+| 步驟 | 內容 |
+|---|---|
+| 1.1 | 第一個 Go 程式（module、`main`） |
+| 1.2 | 手寫 `/api/health` handler（`net/http`、JSON） |
+| 1.3 | 第一個測試（`httptest`、table-driven）與 Makefile |
+| 1.4 | 規格先行：`api/openapi.yaml`、oapi-codegen、`make gen` |
+| 1.5 | 改用 generated strict server 介面實作 health |
+| 1.6 | JSON log（`slog`）與 request-id middleware |
+| 1.7 | Vite + React 專案骨架 |
+| 1.8 | 前端 proxy 與 openapi-typescript / openapi-fetch 型別化 client |
+| 1.9 | Vitest 前端測試；後端覆蓋率門檻 80%（排除 generated code） |
+| 1.10 | GitHub Actions CI：gen 一致性、測試、覆蓋率、前端 build |
 
 ---
 
-## M2 註冊（大綱，約 8 步）
+## M2 註冊
 
-> 完成時：在瀏覽器用工號、姓名、密碼註冊，資料庫裡的密碼是 bcrypt 雜湊。
+> 完成時：在瀏覽器用工號、姓名、密碼註冊。資料庫裡的密碼是 bcrypt 雜湊。重複工號會看到錯誤。
+>
+> 已決定：MariaDB 用 10.11 LTS；重複工號回 409；新增套件 `go-sql-driver/mysql`、
+> `golang-migrate`、`testcontainers-go`、`golang.org/x/crypto/bcrypt`、`react-router` 都已核准。
 
-- compose 啟動 MariaDB；Go 連線與 connection pool
-- golang-migrate：第一張 `accounts` 表（BIGINT 主鍵 + UUID、`UNIQUE` 工號、DB 時間欄位）
-- testcontainers-go：整合測試啟動真的 MariaDB
-- spec：`POST /api/accounts` 與錯誤格式（422 驗證錯誤）
-- account 模組：repository（參數化 SQL）→ service（bcrypt cost 10）→ handler
-- 前端：react-router、註冊表單、欄位驗證、顯示伺服器錯誤
-- 對應：PRD「帳號」「密碼與 Session 只存 Hash」；後端 1.3、2.2
+#### 2.1 compose 啟動 MariaDB
+- 目標：`make db-up` 起一個 MariaDB 10.11，能用 client 連進去執行 `SELECT 1`
+- 新概念：docker compose、volume（資料持久化）、healthcheck、`.env` 與 `.env.example`（secret 不進 git）
+- 檔案：`deploy/compose.yaml`、`.env.example`、`Makefile`（`db-up` / `db-down`）
+- 行數：約 30
+- 驗收：`docker compose ps` 顯示 healthy；`SELECT 1` 回 1
+- 對應：PRD「資料庫」
+
+#### 2.2 Go 連線與 connection pool
+- 目標：後端啟動時連上 DB 並 ping；DB 連不上就啟動失敗，log 是 JSON
+- 新概念：`database/sql`、driver 與 `sql.Open` 的差別、pool 參數（MaxOpenConns、ConnMaxLifetime）、
+  從環境變數讀設定、`parseTime` / `loc=UTC` DSN 參數
+- 檔案：`backend/internal/shared/db.go`、修改 `main.go`、`go.mod`
+- 行數：約 50
+- 驗收：DB 開著時啟動成功；`make db-down` 後再啟動，看到錯誤 log 並結束
+- 對應：後端 1.3
+
+#### 2.3 migration：accounts 表
+- 目標：`make migrate-up` 建出 `accounts`，`migrate-down` 能還原
+- 新概念：migration 為什麼要版本化、up / down、BIGINT 主鍵加 UUID（雙 ID）、
+  `UNIQUE`（工號）、`created_at` 用 DB 時間、CHECK 約束
+- 檔案：`backend/migrations/000001_create_accounts.{up,down}.sql`、`Makefile`
+- 行數：約 40
+- 驗收：`SHOW CREATE TABLE accounts` 看到 UNIQUE；重複 insert 同工號被 DB 擋下
+- 對應：PRD「雙 ID 策略」「資料庫約束優先」
+
+#### 2.4 testcontainers：整合測試底座
+- 目標：測試自動啟動真的 MariaDB、跑 migration，並提供乾淨的 DB 給每個測試
+- 新概念：testcontainers-go、`TestMain`、為什麼不 mock DB、測試間的資料隔離
+- 檔案：`backend/internal/shared/dbtest/dbtest.go`、一個驗證 UNIQUE 的測試
+- 行數：約 70
+- 驗收：`make test` 通過（需要 Docker）；CI 的 `ubuntu-latest` 內建 Docker，覆蓋率門檻仍通過
+- 對應：測試 3.4
+
+#### 2.5 規格先行：POST /api/accounts
+- 目標：`openapi.yaml` 有 `POST /api/accounts`、`Account` schema 和統一的錯誤格式；
+  前後端型別重新產生；後端先回 501 stub
+- 新概念：request / response schema、`201` / `409` / `422`、錯誤 body 設計
+  （`code`、`message`、欄位錯誤清單、request-id）、strict server 要求補齊介面
+- 檔案：`api/openapi.yaml`、`backend/internal/account/handler.go`（stub）、`main.go`
+- 行數：約 60
+- 驗收：`make gen` 後 build 成功；CI 的 gen 一致性檢查通過
+- 對應：PRD 錯誤順序表第 7 項（422）
+
+#### 2.6 account repository
+- 目標：`Create(ctx, account)` 寫入 DB；工號重複回傳 `ErrEmployeeIDTaken`
+- 新概念：repository 層的職責、參數化 SQL（防 SQL injection）、辨識 MySQL error 1062、UUID 在哪產生
+- 檔案：`backend/internal/account/repository.go`、`repository_test.go`
+- 行數：約 80
+- 驗收：整合測試覆蓋成功與重複；覆蓋率門檻通過
+- 對應：專案不變量「SQL 一律參數化」
+
+#### 2.7 account service：驗證與 bcrypt
+- 目標：驗證輸入（工號 6 碼數字、姓名非空且有長度上限、密碼最短長度），
+  密碼用 bcrypt cost 10 雜湊後交給 repository
+- 新概念：為什麼用 bcrypt 而不是 SHA-256、cost 的意義、bcrypt 72 byte 上限、
+  service 與 handler 的分工、用 fake repository 做單元測試
+- 檔案：`backend/internal/account/service.go`、`service_test.go`
+- 行數：約 80
+- 驗收：測試覆蓋各種無效輸入；存進去的字串以 `$2a$10$` 開頭
+- 對應：PRD「密碼只存 Hash」；後端 2.2
+
+#### 2.8 handler 接上 service，後端完整可用
+- 目標：`curl -X POST /api/accounts` 成功回 201（不含密碼），重複工號回 409，
+  無效輸入回 422，log 帶 request-id
+- 新概念：service error 對應 HTTP status、回應不洩漏 hash、`main` 只負責組裝
+- 檔案：修改 `handler.go`、`main.go`，新增 `handler_test.go`
+- 行數：約 100
+- 驗收：三種情況的 curl；DB 裡密碼欄是 bcrypt；`make test` 通過
+- 對應：PRD 2.1 帳號
+
+#### 2.9 前端：router 與註冊表單
+- 目標：`/register` 頁有三個欄位，送出後呼叫 API，成功顯示成功畫面
+- 新概念：react-router、受控表單（controlled input）、`openapi-fetch` 的型別化 POST、提交中狀態
+- 檔案：`frontend/src/main.tsx`、`App.tsx`、`pages/Register.tsx`
+- 行數：約 100
+- 驗收：瀏覽器註冊成功；Network 面板看到 201
+- 對應：前端領域
+
+#### 2.10 前端：欄位驗證與伺服器錯誤，加測試
+- 目標：前端先擋明顯錯誤；後端 409 / 422 的欄位錯誤顯示在對應欄位旁
+- 新概念：前端驗證只是 UX，不能取代後端；解析錯誤格式；Testing Library 測表單
+- 檔案：修改 `Register.tsx`，新增 `Register.test.tsx`
+- 行數：約 100
+- 驗收：重複工號顯示錯誤；`make test` 通過；M2 里程碑在瀏覽器完整走一遍
+- 對應：PRD 2.1 帳號；前端 3.6
 
 ## M3 登入與 Session（大綱，約 9 步）
 
@@ -315,7 +323,7 @@
 
 | 項目 | 選項 | 何時決定 |
 |---|---|---|
-| MariaDB 版本 | PRD 指定 10.5（已 EOL），或改用 10.11 LTS | M2 開始前 |
+| MariaDB 版本 | 已決定：10.11 LTS（PRD 的 10.5 已 EOL） | 已決定 |
 | GitHub 認證 | 在 devbox 設定 GitHub 的 HTTPS credential | M1.10 前 |
 | CI 怎麼 push image | GHCR，或在 devbox 架 self-hosted runner push 到 Harbor | M11 |
 | ArgoCD 怎麼讀 repo | 確認 k3s 能連到 github.com；私有 repo 需要 deploy key 或 token | M4 |
