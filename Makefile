@@ -1,9 +1,11 @@
-.PHONY: run-backend run-frontend test test-backend test-frontend gen gen-backend gen-frontend
+.PHONY: run-backend run-frontend test test-backend test-frontend gen gen-backend gen-frontend db-up db-down
 
 COVER_MIN ?= 80
+COMPOSE = docker compose --env-file .env -f deploy/compose.yml
 
 run-backend:
 	cd backend && go run ./cmd/api
+
 run-frontend:
 	cd frontend && npm run dev
 
@@ -26,3 +28,9 @@ gen-backend:
 
 gen-frontend:
 	cd frontend && npx openapi-typescript ../api/openapi.yaml -o src/api/schema.d.ts
+
+db-up:
+	$(COMPOSE) up -d --wait
+
+db-down:
+	$(COMPOSE) down
