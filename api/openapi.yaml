@@ -101,6 +101,12 @@ paths:
       responses:
         "204":
           description: Logged out
+          headers:
+            Set-Cookie:
+              required: true
+              description: Expires the session cookie (Max-Age=0).
+              schema:
+                type: string
         "401":
           $ref: "#/components/responses/Unauthorized"
         default:

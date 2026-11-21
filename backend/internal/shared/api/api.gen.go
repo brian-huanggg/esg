@@ -535,10 +535,16 @@ type DeleteCurrentSessionResponseObject interface {
 	VisitDeleteCurrentSessionResponse(w http.ResponseWriter) error
 }
 
+type DeleteCurrentSession204ResponseHeaders struct {
+	SetCookie string
+}
+
 type DeleteCurrentSession204Response struct {
+	Headers DeleteCurrentSession204ResponseHeaders
 }
 
 func (response DeleteCurrentSession204Response) VisitDeleteCurrentSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
 	w.WriteHeader(204)
 	return nil
 }

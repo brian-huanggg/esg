@@ -52,10 +52,11 @@ func newHandler(logger *slog.Logger, db *sql.DB) http.Handler {
 
 	sessionRepo := session.NewRepository(db)
 	authSvc := auth.NewService(repo, sessionRepo)
-	sessionHandler := auth.NewSessionHandler(authSvc, repo, logger)
+	sessionHandler := auth.NewSessionHandler(authSvc, repo, sessionRepo, logger)
 
 	authMW := middleware.Authenticate(sessionRepo, logger, map[string]bool{
-		"GetCurrentAccount": true,
+		"GetCurrentAccount":    true,
+		"DeleteCurrentSession": true,
 	})
 
 	mux := http.NewServeMux()

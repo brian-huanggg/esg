@@ -279,6 +279,8 @@ export interface operations {
             /** @description Logged out */
             204: {
                 headers: {
+                    /** @description Expires the session cookie (Max-Age=0). */
+                    "Set-Cookie": string;
                     [name: string]: unknown;
                 };
                 content?: never;

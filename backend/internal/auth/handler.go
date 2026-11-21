@@ -21,14 +21,19 @@ type accountByIDFinder interface {
 	FindByID(ctx context.Context, id int64) (*account.Account, error)
 }
 
+type sessionDeleter interface {
+	Delete(ctx context.Context, tokenHash []byte) error
+}
+
 type SessionHandler struct {
 	svc      loginService
 	accounts accountByIDFinder
+	sessions sessionDeleter
 	logger   *slog.Logger
 }
 
-func NewSessionHandler(svc loginService, accounts accountByIDFinder, logger *slog.Logger) *SessionHandler {
-	return &SessionHandler{svc: svc, accounts: accounts, logger: logger}
+func NewSessionHandler(svc loginService, accounts accountByIDFinder, sessions sessionDeleter, logger *slog.Logger) *SessionHandler {
+	return &SessionHandler{svc: svc, accounts: accounts, sessions: sessions, logger: logger}
 }
 
 func sessionCookie(token string) string {
@@ -36,6 +41,19 @@ func sessionCookie(token string) string {
 		Name:     cookieName,
 		Value:    token,
 		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	}
+	return c.String()
+}
+
+func clearedSessionCookie() string {
+	c := http.Cookie{
+		Name:     cookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1, // serialized as Max-Age=0
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
@@ -78,8 +96,26 @@ func (h *SessionHandler) CreateSession(ctx context.Context, req api.CreateSessio
 	}
 }
 
-func (h *SessionHandler) DeleteCurrentSession(_ context.Context, _ api.DeleteCurrentSessionRequestObject) (api.DeleteCurrentSessionResponseObject, error) {
-	return api.DeleteCurrentSessiondefaultJSONResponse{StatusCode: 501, Body: notImplemented()}, nil
+func (h *SessionHandler) DeleteCurrentSession(ctx context.Context, _ api.DeleteCurrentSessionRequestObject) (api.DeleteCurrentSessionResponseObject, error) {
+	requestID := middleware.RequestIDFrom(ctx)
+
+	hash, ok := middleware.TokenHashFrom(ctx)
+	if !ok {
+		return api.DeleteCurrentSession401JSONResponse{UnauthorizedJSONResponse: api.UnauthorizedJSONResponse{
+			Code: "UNAUTHORIZED", Message: "login required", RequestId: requestID,
+		}}, nil
+	}
+
+	if err := h.sessions.Delete(ctx, hash); err != nil {
+		h.logger.ErrorContext(ctx, "delete session failed", "error", err)
+		return api.DeleteCurrentSessiondefaultJSONResponse{
+			StatusCode: 500,
+			Body:       api.Error{Code: "INTERNAL", Message: "internal error", RequestId: requestID},
+		}, nil
+	}
+	return api.DeleteCurrentSession204Response{
+		Headers: api.DeleteCurrentSession204ResponseHeaders{SetCookie: clearedSessionCookie()},
+	}, nil
 }
 
 func (h *SessionHandler) GetCurrentAccount(ctx context.Context, _ api.GetCurrentAccountRequestObject) (api.GetCurrentAccountResponseObject, error) {

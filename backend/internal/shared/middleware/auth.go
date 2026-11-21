@@ -82,3 +82,7 @@ func writeError(ctx context.Context, w http.ResponseWriter, status int, code, ms
 func WithAccountID(ctx context.Context, id int64) context.Context {
 	return context.WithValue(ctx, accountIDKey{}, id)
 }
+
+func WithTokenHash(ctx context.Context, h []byte) context.Context {
+	return context.WithValue(ctx, tokenHashKey{}, h)
+}

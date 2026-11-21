@@ -28,8 +28,18 @@ type fakeLogin struct {
 	err   error
 }
 
+type fakeSessionDeleter struct {
+	err     error
+	deleted []byte
+}
+
+func (f *fakeSessionDeleter) Delete(_ context.Context, h []byte) error {
+	f.deleted = h
+	return f.err
+}
+
 func newTestHandler(f fakeLogin) *SessionHandler {
-	return NewSessionHandler(f, fakeAccountByID{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return NewSessionHandler(f, fakeAccountByID{}, &fakeSessionDeleter{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 func (f fakeLogin) Login(context.Context, string, string) (string, *account.Account, error) {
@@ -93,16 +103,6 @@ func TestCreateSessionErrors(t *testing.T) {
 	}
 }
 
-func TestStubsReturn501(t *testing.T) {
-	h := &SessionHandler{}
-	ctx := context.Background()
-
-	del, _ := h.DeleteCurrentSession(ctx, api.DeleteCurrentSessionRequestObject{})
-	if r, ok := del.(api.DeleteCurrentSessiondefaultJSONResponse); !ok || r.StatusCode != 501 {
-		t.Errorf("DeleteCurrentSession = %#v, want 501 default response", del)
-	}
-}
-
 func TestGetCurrentAccount(t *testing.T) {
 	found := &account.Account{EmployeeID: "123456", Name: "Amy"}
 	tests := []struct {
@@ -134,10 +134,54 @@ func TestGetCurrentAccount(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewSessionHandler(fakeLogin{}, tt.accts, slog.New(slog.NewTextHandler(io.Discard, nil)))
+			h := NewSessionHandler(fakeLogin{}, tt.accts, &fakeSessionDeleter{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 			resp, _ := h.GetCurrentAccount(tt.ctx, api.GetCurrentAccountRequestObject{})
 			if !tt.check(resp) {
 				t.Errorf("unexpected response %#v", resp)
+			}
+		})
+	}
+}
+
+func TestDeleteCurrentSession(t *testing.T) {
+	hash := []byte("hash")
+	tests := []struct {
+		name     string
+		ctx      context.Context
+		err      error
+		wantType string
+	}{
+		{"ok", middleware.WithTokenHash(context.Background(), hash), nil, "204"},
+		{"no token hash in ctx", context.Background(), nil, "401"},
+		{"db failure", middleware.WithTokenHash(context.Background(), hash), errors.New("db down"), "500"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := &fakeSessionDeleter{err: tt.err}
+			h := NewSessionHandler(fakeLogin{}, fakeAccountByID{}, fs, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+			resp, err := h.DeleteCurrentSession(tt.ctx, api.DeleteCurrentSessionRequestObject{})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			switch r := resp.(type) {
+			case api.DeleteCurrentSession204Response:
+				if tt.wantType != "204" || !strings.Contains(r.Headers.SetCookie, "Max-Age=0") {
+					t.Errorf("got 204 with cookie %q", r.Headers.SetCookie)
+				}
+				if string(fs.deleted) != "hash" {
+					t.Errorf("deleted %q, want hash", fs.deleted)
+				}
+			case api.DeleteCurrentSession401JSONResponse:
+				if tt.wantType != "401" {
+					t.Errorf("unexpected 401")
+				}
+			case api.DeleteCurrentSessiondefaultJSONResponse:
+				if tt.wantType != "500" || r.StatusCode != 500 {
+					t.Errorf("unexpected default response %d", r.StatusCode)
+				}
+			default:
+				t.Fatalf("unexpected response type %T", resp)
 			}
 		})
 	}
