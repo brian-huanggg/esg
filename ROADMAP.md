@@ -9,8 +9,8 @@
   一定能在瀏覽器完整操作一個功能
 - **行數預算**：前期每步 30–80 行，後期每步 100–200 行
 - **越早做成本越低**：規格先行、JSON log、request-id、測試、覆蓋率、CI 都在 M1 就導入
-- **基礎設施先簡化**：單機 MariaDB、用環境變數代替 Vault。M4 第一次部署到 k3s，
-  之後每個里程碑都走一次 GitOps 更新。Galera 和 Vault 放到 M11
+- **基礎設施先簡化**：單機 MariaDB。M4 第一次部署到 k3s，並用 Vault Secrets Operator
+  把機密從 Vault 同步成 K8s Secret；之後每個里程碑都走一次 GitOps 更新。Galera 放到 M11
 - **細節逐步展開**：M0–M1 已經細到每一步。其餘里程碑先列大綱，做到前一個里程碑時再展開
 
 ## 進度怎麼看
@@ -142,68 +142,52 @@
 
 ---
 
-## M3 登入與 Session（9 步）
+## M3 登入與 Session（已完成）
 
 > 完成時：在瀏覽器登入、登出，重新整理後仍維持登入，閒置 30 分鐘後自動登出。
 > 鎖定與 IP 限速留到 M10；3.4 的 service 只留清楚的失敗出口。
-> 對應：PRD「登入」；[Session 與 Cookie]、[CSRF]
+> 每一步的細節看 `notes/3.X-*.md` 和 tag `step-03-01`～`step-03-09c`（3.8 拆成 08a / 08b，3.9 拆成 09a / 09b / 09c）。
 
-#### 3.1 migration：`sessions` 表
-- 目標：`sessions` 只存 `token_hash`（SHA-256）、`account_id`（FK）、`created_at`、`last_seen_at`、`expires_at`
-- 新概念：Session 與 JWT 的取捨、為什麼只存雜湊、用 DB 時間判斷閒置與絕對逾時
-- 驗收：`migrate-up` / `migrate-down` 都能跑；`token_hash` 有 UNIQUE
-
-#### 3.2 規格先行：登入、登出、目前帳號
-- 目標：`api/openapi.yaml` 有 `POST /api/sessions`、`DELETE /api/sessions/current`、`GET /api/accounts/me`、
-  `cookieAuth` securityScheme、401 回應；`make gen` 後 build 成功，後端先回 501 stub
-- 新概念：OpenAPI 的 cookie 認證、把 Session 當資源
-
-#### 3.3 session repository
-- 目標：Create、依 hash 查詢（同時檢查閒置 30 分鐘與絕對 8 小時）、touch、Delete
-- 新概念：單一 SQL 同時判斷與更新；逾時測試用 SQL 倒撥時間，不用 `time.Now()`；對應 Spring Session JDBC
-- 驗收：整合測試涵蓋有效、閒置逾時、絕對逾時、已刪除
-
-#### 3.4 auth service
-- 目標：驗證帳密；發 32 bytes 的 `crypto/rand` token，存 SHA-256；帳號不存在時跑 dummy bcrypt，回應時間一致；
-  失敗統一為「工號或密碼錯誤」
-- 新概念：`crypto/rand` 與 `math/rand`、防帳號枚舉、fake repository 單元測試
-
-#### 3.5 登入、登出 handler 與 Cookie
-- 目標：curl 登入拿到 Cookie（HttpOnly、Secure、SameSite=Lax、Path=/），登出後 Cookie 失效；失敗回 401
-- 新概念：strict server 設定 Set-Cookie、同源不需要 CORS
-
-#### 3.6 認證 middleware 與 `GET /api/accounts/me`
-- 目標：讀 Cookie、查 session、account 放進 context；沒登入回 401；`/me` 回目前帳號
-- 新概念：Go 的 context value、對應 Spring Security filter chain、哪些路由要保護
-
-#### 3.7 CSRF
-- 目標：登入時發 CSRF token；寫入類請求要帶 `X-CSRF-Token`，失敗回 403；順序 401 → CSRF；用登出（`DELETE`）驗證
-- 新概念：double-submit 與 synchronizer token、SameSite 為什麼不夠
-
-#### 3.8 前端：登入頁、登入狀態、受保護路由
-- 目標：登入頁、auth context（以 `/accounts/me` 判斷登入）、`openapi-fetch` middleware 自動帶 CSRF header、受保護路由、登出按鈕
-- 新概念：React Context、路由守衛、Cookie 由瀏覽器自動帶
-
-#### 3.9 前端：401 處理與測試
-- 目標：401 時全域導回登入頁；登入表單顯示錯誤；Testing Library 測試；M3 在瀏覽器完整走一遍
-- 新概念：全域攔截 401、測試時 mock fetch
-
-> 行數：3.3、3.5、3.8 可能超過 80 行，超過時再拆。
+| 步驟 | 內容 |
+|---|---|
+| 3.1 | `sessions` 表（只存 `token_hash`） |
+| 3.2 | 規格：`POST /api/sessions`、`DELETE /api/sessions/current`、`GET /api/accounts/me`、`cookieAuth` |
+| 3.3 | session repository（閒置 30 分鐘、絕對 8 小時，單一 SQL） |
+| 3.4 | auth service（`crypto/rand`、SHA-256、dummy bcrypt） |
+| 3.5 | 登入、登出 handler 與 Cookie |
+| 3.6 | 認證 middleware 與 `/accounts/me` |
+| 3.7 | CSRF（`X-CSRF-Token`） |
+| 3.8a / 3.8b | 前端登入頁；auth context、受保護路由、登出按鈕 |
+| 3.9a / 3.9b / 3.9c | 全域 401 處理；401 與 `RequireAuth` 測試；Login 測試與瀏覽器走查 |
 
 ---
 
-## M4 第一次部署（大綱，約 9 步）
+## M4 第一次部署（大綱，11 步）
 
-> 完成時：同一份程式跑在 k3s 上，改一行程式碼後，走一次完整的
+> 完成時：同一份程式跑在 k3s 上（HTTPS），改一行程式碼後，走一次完整的
 > build → push Harbor → 更新 values → ArgoCD sync。
+> 已決定：migration 用獨立 migrate image；k3s 已有 TLS；repo 為公開（ArgoCD 不需 deploy key）；
+> 機密由 Vault Secrets Operator（VSO）從 Vault 同步成 K8s Secret（VSO 已核准）。
+> 前提：k3s 內的 Vault 已安裝並 unseal；若還沒，4.6 前先加一步。
 
-- 後端 Dockerfile：multi-stage + distroless
-- 前端 Dockerfile：Nginx + SPA，Nginx 把 `/api` 轉給後端（同源）
-- compose 一次啟動所有服務
-- Helm chart：backend、frontend、MariaDB（單節點）、migration Job
-- 本機 build，push 到 Harbor（`lab` 專案）
-- ArgoCD Application 指向 repo 裡的 chart，練習一次 GitOps 更新
-- Secret 先由學習者手動建立（不進 git），M11 再改成 Vault
+| 步驟 | 內容 | 驗收 |
+|---|---|---|
+| 4.1 | 後端 Dockerfile：multi-stage + distroless nonroot、`.dockerignore` | `docker run` 後 `curl /api/health` 回 200 |
+| 4.2 | migrate image：`migrate/migrate` + `backend/migrations`（給 Job 用） | 對 compose 的 MariaDB 跑 `up` 成功 |
+| 4.3 | 前端 Dockerfile + `nginx.conf`（SPA fallback、`/api` 轉後端，同源） | 經 Nginx 打 `/api/health` 通 |
+| 4.4 | compose 全服務（migrate 跑完才啟動 backend） | **檢查點 1**：瀏覽器註冊、登入、登出 |
+| 4.5 | `make push`：tag 用 git short sha，推到 Harbor `lab`；`imagePullSecret` | Harbor 看得到三個 image |
+| 4.6 | Vault 端：KV 路徑、policy、Kubernetes auth role；用 Helm 安裝 VSO | VSO pod Running，CRD 存在 |
+| 4.7 | chart 骨架、backend、`VaultAuth` + `VaultStaticSecret` | VSO 自動產生 K8s Secret `esg-db` |
+| 4.8 | chart：MariaDB StatefulSet + PVC、migration Job | Job 完成，表都建好 |
+| 4.9 | chart：frontend、Ingress（TLS）；手動 `helm install` | **檢查點 2**：瀏覽器 HTTPS 註冊、登入 |
+| 4.10 | ArgoCD Application 指向 repo 的 chart，第一次 sync | Synced / Healthy |
+| 4.11 | GitOps 迴圈：改一行 → build → push → 更新 `values.yaml` tag → sync | 瀏覽器看到改動 |
+
+- 順序：Docker → compose → Harbor → 手動 `helm install` → ArgoCD。手動先成功，ArgoCD 出錯時才分得出是 chart 還是 ArgoCD 的問題
+- 陷阱（4.8）：VSO 建立 Secret 是非同步的。migration Job 若用 `pre-install` hook，會比 `VaultStaticSecret` 先跑而失敗，
+  要改用 `post-install` 或 ArgoCD sync-wave；Pod 缺 Secret 時會卡在 `CreateContainerConfigError`，Secret 出現後自動重試
+- 陷阱（4.9）：Cookie 有 `Secure`，Ingress 必須走 HTTPS，否則登入後瀏覽器不帶 Cookie
 - 對應：PRD「部署」；[distroless]、維運 3.2、3.3
 
 ## M5 提案 CRUD（大綱，約 12 步）
@@ -246,7 +230,7 @@
 
 - 狀態依 DB 時間即時推算（NOT OPEN / OPEN / CLOSED）
 - state 403；Admin 略過 state 檢查
-- Admin 從環境變數注入並同步（M11 改成 Vault）
+- Admin 帳號從 Vault 經 VSO 同步的 Secret 以環境變數注入，啟動時同步
 - Admin 後台：所有提案、提案者，以及替他人建立和編輯
 - 前端：截止狀態顯示、Admin 頁面
 - 對應：PRD「截止時間」「Admin」；後端 2.2
@@ -272,11 +256,10 @@
 
 ## M11 CI 安全掃描與正式基礎設施（大綱，約 10 步）
 
-> 完成時：CI 包含四種安全掃描；機密由 Vault 注入；資料庫換成 Galera。
+> 完成時：CI 包含四種安全掃描；資料庫換成 Galera。（Vault 與 VSO 已在 M4 完成）
 
 - GitHub Actions：Semgrep、Trivy（image）、gitleaks（secret）、相依套件掃描（Mend 或替代方案）
 - CI build image 並 push（方式見待決事項）；更新 Helm values，觸發 ArgoCD
-- Vault：Admin 帳號與 DB 密碼的注入方式
 - MariaDB Galera（注意 k3s 單節點的資源）
 - 對應：PRD「CI」「部署」；資安 2.6；維運 1.3、2.3
 
@@ -295,5 +278,6 @@
 | MariaDB 版本 | 已決定：11.4 LTS（PRD 的 10.5 已 EOL） | 已決定 |
 | GitHub 認證 | 在 devbox 設定 GitHub 的 HTTPS credential | M1.10 前 |
 | CI 怎麼 push image | GHCR，或在 devbox 架 self-hosted runner push 到 Harbor | M11 |
-| ArgoCD 怎麼讀 repo | 確認 k3s 能連到 github.com；私有 repo 需要 deploy key 或 token | M4 |
+| ArgoCD 怎麼讀 repo | 已決定：repo 公開，不需 deploy key；仍需確認 k3s 能連到 github.com | 已決定 |
+| Vault 是否已安裝並 unseal | 已安裝就直接做 4.6；否則 4.6 前加一步 | M4.6 前 |
 | 相依套件掃描 | Mend App，或 dependency-review-action / osv-scanner / Trivy | M11 |
