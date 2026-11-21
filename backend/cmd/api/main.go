@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"net/http"
 	"os"
@@ -33,7 +34,7 @@ func run(logger *slog.Logger) error {
 	defer db.Close()
 
 	logger.Info("listening", "addr", ":8080")
-	return http.ListenAndServe(":8080", newHandler(logger))
+	return http.ListenAndServe(":8080", newHandler(logger, db))
 }
 
 type server struct {
@@ -41,9 +42,14 @@ type server struct {
 	*account.Handler
 }
 
-func newHandler(logger *slog.Logger) http.Handler {
+func newHandler(logger *slog.Logger, db *sql.DB) http.Handler {
+	repo := account.NewRepository(db)
+	svc := account.NewService(repo)
+	accountHandler := account.NewHandler(svc, logger)
+
 	mux := http.NewServeMux()
-	strict := api.NewStrictHandler(server{&shared.HealthHandler{}, &account.Handler{}}, nil)
+	strict := api.NewStrictHandler(server{&shared.HealthHandler{}, accountHandler}, nil)
 	api.HandlerFromMux(strict, mux)
 	return middleware.RequestID(middleware.Logging(logger, mux))
+
 }

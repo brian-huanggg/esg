@@ -25,7 +25,7 @@ func TestHealthRoutes(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			rec := httptest.NewRecorder()
 
-			newHandler(slog.New(slog.DiscardHandler)).ServeHTTP(rec, req)
+			newHandler(slog.New(slog.DiscardHandler), nil).ServeHTTP(rec, req)
 
 			if rec.Code != tt.wantStatus {
 				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
