@@ -49,9 +49,101 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        
+
       deprecated: false
+  /api/sessions:
+    post:
+      operationId: createSession
+      summary: Log in (create a session)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionRequest"
+      responses:
+        "201":
+          description: Logged in
+          headers:
+            Set-Cookie:
+              required: true
+              description: Session cookie (HttpOnly, SameSite=Lax).
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "401":
+          description: Wrong employee id or password.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/sessions/current:
+    delete:
+      operationId: deleteCurrentSession
+      summary: Log out (delete the current session)
+      security:
+        - cookieAuth: []
+      responses:
+        "204":
+          description: Logged out
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        default:
+          description: Unexpected Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/accounts/me:
+    get:
+      operationId: getCurrentAccount
+      summary: Get the logged-in account
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: The current account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        default:
+          description: Unexpected Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session
+  responses:
+    Unauthorized:
+      description: Not logged in, or the session expired.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
   schemas:
     Health:
       type: object
@@ -77,6 +169,17 @@ components:
         password:
           type: string
           minLength: 1
+          maxLength: 72
+    CreateSessionRequest:
+      type: object
+      required:
+        - employeeId
+        - password
+      properties:
+        employeeId:
+          type: string
+        password:
+          type: string
           maxLength: 72
     Account:
       type: object
