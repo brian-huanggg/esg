@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { api, setUnauthorizedHandler } from '../api/client'
 import { AuthContext, type AuthState } from './context'
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -24,6 +24,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true
     }
+  }, [])
+
+  useEffect(() => {
+    // Session expired mid-use: flipping to anonymous makes RequireAuth redirect.
+    setUnauthorizedHandler(() => setState({ kind: 'anonymous' }))
+    return () => setUnauthorizedHandler(null)
   }, [])
 
   async function logout() {

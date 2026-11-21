@@ -1,10 +1,6 @@
 import createClient from 'openapi-fetch'
 import type { components, paths } from './schema'
 
-// Request() rejects relative URLs outside a browser (e.g. in vitest),
-// so anchor to the current origin. Same-origin in prod, so no CORS.
-// fetch is looked up per call because createClient would otherwise
-// capture globalThis.fetch once, and tests could not stub it.
 export const api = createClient<paths>({
   baseUrl: window.location.origin,
   fetch: (req) => globalThis.fetch(req),
@@ -18,11 +14,24 @@ function readCookie(name: string): string | undefined {
   return pair?.slice(prefix.length)
 }
 
+const EXPECTED_401_PATHS = new Set(['/api/sessions', '/api/accounts/me'])
+
+let onUnauthorized: (() => void) | null = null
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  onUnauthorized = handler
+}
+
 api.use({
   onRequest({ request }) {
     if (SAFE_METHODS.has(request.method)) return
     const token = readCookie('csrf_token')
     if (token) request.headers.set('X-CSRF-Token', token)
+  },
+  onResponse({ request, response }) {
+    if (response.status !== 401) return
+    if (EXPECTED_401_PATHS.has(new URL(request.url).pathname)) return
+    onUnauthorized?.()
   },
 })
 
