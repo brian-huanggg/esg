@@ -119,109 +119,78 @@
 
 ---
 
-## M2 註冊
+## M2 註冊（已完成）
 
 > 完成時：在瀏覽器用工號、姓名、密碼註冊。資料庫裡的密碼是 bcrypt 雜湊。重複工號會看到錯誤。
->
-> 已決定：MariaDB 用 11.4 LTS；重複工號回 409；新增套件 `go-sql-driver/mysql`、
-> `golang-migrate`、`testcontainers-go`、`golang.org/x/crypto/bcrypt`、`react-router` 都已核准。
+> 已決定：MariaDB 11.4 LTS；重複工號回 409；`go-sql-driver/mysql`、`golang-migrate`、
+> `testcontainers-go`、`x/crypto/bcrypt`、`react-router` 已核准。
+> 每一步的細節看 `notes/2.X-*.md` 和 tag `step-02-01`～`step-02-10`（2.8 拆成 08a / 08b）。
 
-#### 2.1 compose 啟動 MariaDB
-- 目標：`make db-up` 起一個 MariaDB 11.4，能用 client 連進去執行 `SELECT 1`
-- 新概念：docker compose、volume（資料持久化）、healthcheck、`.env` 與 `.env.example`（secret 不進 git）
-- 檔案：`deploy/compose.yaml`、`.env.example`、`Makefile`（`db-up` / `db-down`）
-- 行數：約 30
-- 驗收：`docker compose ps` 顯示 healthy；`SELECT 1` 回 1
-- 對應：PRD「資料庫」
+| 步驟 | 內容 |
+|---|---|
+| 2.1 | compose 啟動 MariaDB（volume、healthcheck、`.env`） |
+| 2.2 | Go 連線與 connection pool（`database/sql`、環境變數設定） |
+| 2.3 | migration：`accounts` 表（雙 ID、UNIQUE 工號） |
+| 2.4 | testcontainers 整合測試底座（`dbtest`） |
+| 2.5 | 規格先行：`POST /api/accounts`、統一錯誤格式、501 stub |
+| 2.6 | account repository（參數化 SQL、辨識 error 1062） |
+| 2.7 | account service：輸入驗證與 bcrypt cost 10 |
+| 2.8a | repository 回讀 `created_at`、修正密碼長度上限規格 |
+| 2.8b | handler 接上 service：201 / 409 / 422 |
+| 2.9 | 前端：router 與註冊表單 |
+| 2.10 | 前端：欄位驗證、伺服器錯誤顯示、Testing Library 測試 |
 
-#### 2.2 Go 連線與 connection pool
-- 目標：後端啟動時連上 DB 並 ping；DB 連不上就啟動失敗，log 是 JSON
-- 新概念：`database/sql`、driver 與 `sql.Open` 的差別、pool 參數（MaxOpenConns、ConnMaxLifetime）、
-  從環境變數讀設定、`parseTime` / `loc=UTC` DSN 參數
-- 檔案：`backend/internal/shared/db.go`、修改 `main.go`、`go.mod`
-- 行數：約 50
-- 驗收：DB 開著時啟動成功；`make db-down` 後再啟動，看到錯誤 log 並結束
-- 對應：後端 1.3
+---
 
-#### 2.3 migration：accounts 表
-- 目標：`make migrate-up` 建出 `accounts`，`migrate-down` 能還原
-- 新概念：migration 為什麼要版本化、up / down、BIGINT 主鍵加 UUID（雙 ID）、
-  `UNIQUE`（工號）、`created_at` 用 DB 時間、CHECK 約束
-- 檔案：`backend/migrations/000001_create_accounts.{up,down}.sql`、`Makefile`
-- 行數：約 40
-- 驗收：`SHOW CREATE TABLE accounts` 看到 UNIQUE；重複 insert 同工號被 DB 擋下
-- 對應：PRD「雙 ID 策略」「資料庫約束優先」
-
-#### 2.4 testcontainers：整合測試底座
-- 目標：測試自動啟動真的 MariaDB、跑 migration，並提供乾淨的 DB 給每個測試
-- 新概念：testcontainers-go、`TestMain`、為什麼不 mock DB、測試間的資料隔離
-- 檔案：`backend/internal/shared/dbtest/dbtest.go`、一個驗證 UNIQUE 的測試
-- 行數：約 70
-- 驗收：`make test` 通過（需要 Docker）；CI 的 `ubuntu-latest` 內建 Docker，覆蓋率門檻仍通過
-- 對應：測試 3.4
-
-#### 2.5 規格先行：POST /api/accounts
-- 目標：`openapi.yaml` 有 `POST /api/accounts`、`Account` schema 和統一的錯誤格式；
-  前後端型別重新產生；後端先回 501 stub
-- 新概念：request / response schema、`201` / `409` / `422`、錯誤 body 設計
-  （`code`、`message`、欄位錯誤清單、request-id）、strict server 要求補齊介面
-- 檔案：`api/openapi.yaml`、`backend/internal/account/handler.go`（stub）、`main.go`
-- 行數：約 60
-- 驗收：`make gen` 後 build 成功；CI 的 gen 一致性檢查通過
-- 對應：PRD 錯誤順序表第 7 項（422）
-
-#### 2.6 account repository
-- 目標：`Create(ctx, account)` 寫入 DB；工號重複回傳 `ErrEmployeeIDTaken`
-- 新概念：repository 層的職責、參數化 SQL（防 SQL injection）、辨識 MySQL error 1062、UUID 在哪產生
-- 檔案：`backend/internal/account/repository.go`、`repository_test.go`
-- 行數：約 80
-- 驗收：整合測試覆蓋成功與重複；覆蓋率門檻通過
-- 對應：專案不變量「SQL 一律參數化」
-
-#### 2.7 account service：驗證與 bcrypt
-- 目標：驗證輸入（工號 6 碼數字、姓名非空且有長度上限、密碼最短長度），
-  密碼用 bcrypt cost 10 雜湊後交給 repository
-- 新概念：為什麼用 bcrypt 而不是 SHA-256、cost 的意義、bcrypt 72 byte 上限、
-  service 與 handler 的分工、用 fake repository 做單元測試
-- 檔案：`backend/internal/account/service.go`、`service_test.go`
-- 行數：約 80
-- 驗收：測試覆蓋各種無效輸入；存進去的字串以 `$2a$10$` 開頭
-- 對應：PRD「密碼只存 Hash」；後端 2.2
-
-#### 2.8 handler 接上 service，後端完整可用
-- 目標：`curl -X POST /api/accounts` 成功回 201（不含密碼），重複工號回 409，
-  無效輸入回 422，log 帶 request-id
-- 新概念：service error 對應 HTTP status、回應不洩漏 hash、`main` 只負責組裝
-- 檔案：修改 `handler.go`、`main.go`，新增 `handler_test.go`
-- 行數：約 100
-- 驗收：三種情況的 curl；DB 裡密碼欄是 bcrypt；`make test` 通過
-- 對應：PRD 2.1 帳號
-
-#### 2.9 前端：router 與註冊表單
-- 目標：`/register` 頁有三個欄位，送出後呼叫 API，成功顯示成功畫面
-- 新概念：react-router、受控表單（controlled input）、`openapi-fetch` 的型別化 POST、提交中狀態
-- 檔案：`frontend/src/main.tsx`、`App.tsx`、`pages/Register.tsx`
-- 行數：約 100
-- 驗收：瀏覽器註冊成功；Network 面板看到 201
-- 對應：前端領域
-
-#### 2.10 前端：欄位驗證與伺服器錯誤，加測試
-- 目標：前端先擋明顯錯誤；後端 409 / 422 的欄位錯誤顯示在對應欄位旁
-- 新概念：前端驗證只是 UX，不能取代後端；解析錯誤格式；Testing Library 測表單
-- 檔案：修改 `Register.tsx`，新增 `Register.test.tsx`
-- 行數：約 100
-- 驗收：重複工號顯示錯誤；`make test` 通過；M2 里程碑在瀏覽器完整走一遍
-- 對應：PRD 2.1 帳號；前端 3.6
-
-## M3 登入與 Session（大綱，約 9 步）
+## M3 登入與 Session（9 步）
 
 > 完成時：在瀏覽器登入、登出，重新整理後仍維持登入，閒置 30 分鐘後自動登出。
+> 鎖定與 IP 限速留到 M10；3.4 的 service 只留清楚的失敗出口。
+> 對應：PRD「登入」；[Session 與 Cookie]、[CSRF]
 
-- `sessions` 表：只存 SHA-256；閒置 30 分鐘、最長 8 小時（用 DB 時間判斷）
-- Cookie 屬性（HttpOnly、Secure、SameSite）
-- 認證 middleware（401）、CSRF 防護
-- 前端：登入頁、登入狀態、受保護的路由、401 時導回登入頁
-- 對應：PRD「登入」；[Session 與 Cookie]、[CSRF]
+#### 3.1 migration：`sessions` 表
+- 目標：`sessions` 只存 `token_hash`（SHA-256）、`account_id`（FK）、`created_at`、`last_seen_at`、`expires_at`
+- 新概念：Session 與 JWT 的取捨、為什麼只存雜湊、用 DB 時間判斷閒置與絕對逾時
+- 驗收：`migrate-up` / `migrate-down` 都能跑；`token_hash` 有 UNIQUE
+
+#### 3.2 規格先行：登入、登出、目前帳號
+- 目標：`api/openapi.yaml` 有 `POST /api/sessions`、`DELETE /api/sessions/current`、`GET /api/accounts/me`、
+  `cookieAuth` securityScheme、401 回應；`make gen` 後 build 成功，後端先回 501 stub
+- 新概念：OpenAPI 的 cookie 認證、把 Session 當資源
+
+#### 3.3 session repository
+- 目標：Create、依 hash 查詢（同時檢查閒置 30 分鐘與絕對 8 小時）、touch、Delete
+- 新概念：單一 SQL 同時判斷與更新；逾時測試用 SQL 倒撥時間，不用 `time.Now()`；對應 Spring Session JDBC
+- 驗收：整合測試涵蓋有效、閒置逾時、絕對逾時、已刪除
+
+#### 3.4 auth service
+- 目標：驗證帳密；發 32 bytes 的 `crypto/rand` token，存 SHA-256；帳號不存在時跑 dummy bcrypt，回應時間一致；
+  失敗統一為「工號或密碼錯誤」
+- 新概念：`crypto/rand` 與 `math/rand`、防帳號枚舉、fake repository 單元測試
+
+#### 3.5 登入、登出 handler 與 Cookie
+- 目標：curl 登入拿到 Cookie（HttpOnly、Secure、SameSite=Lax、Path=/），登出後 Cookie 失效；失敗回 401
+- 新概念：strict server 設定 Set-Cookie、同源不需要 CORS
+
+#### 3.6 認證 middleware 與 `GET /api/accounts/me`
+- 目標：讀 Cookie、查 session、account 放進 context；沒登入回 401；`/me` 回目前帳號
+- 新概念：Go 的 context value、對應 Spring Security filter chain、哪些路由要保護
+
+#### 3.7 CSRF
+- 目標：登入時發 CSRF token；寫入類請求要帶 `X-CSRF-Token`，失敗回 403；順序 401 → CSRF；用登出（`DELETE`）驗證
+- 新概念：double-submit 與 synchronizer token、SameSite 為什麼不夠
+
+#### 3.8 前端：登入頁、登入狀態、受保護路由
+- 目標：登入頁、auth context（以 `/accounts/me` 判斷登入）、`openapi-fetch` middleware 自動帶 CSRF header、受保護路由、登出按鈕
+- 新概念：React Context、路由守衛、Cookie 由瀏覽器自動帶
+
+#### 3.9 前端：401 處理與測試
+- 目標：401 時全域導回登入頁；登入表單顯示錯誤；Testing Library 測試；M3 在瀏覽器完整走一遍
+- 新概念：全域攔截 401、測試時 mock fetch
+
+> 行數：3.3、3.5、3.8 可能超過 80 行，超過時再拆。
+
+---
 
 ## M4 第一次部署（大綱，約 9 步）
 
