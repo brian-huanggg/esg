@@ -227,11 +227,9 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Logged in */
+            /** @description Logged in. Sets two cookies: `session` (HttpOnly) and `csrf_token` (readable by JS, echoed back as X-CSRF-Token). */
             201: {
                 headers: {
-                    /** @description Session cookie (HttpOnly, SameSite=Lax). */
-                    "Set-Cookie": string;
                     [name: string]: unknown;
                 };
                 content: {

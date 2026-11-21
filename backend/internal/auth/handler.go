@@ -14,7 +14,29 @@ import (
 const cookieName = middleware.SessionCookieName
 
 type loginService interface {
-	Login(ctx context.Context, employeeID, password string) (string, *account.Account, error)
+	Login(ctx context.Context, employeeID, password string) (Tokens, *account.Account, error)
+}
+
+type createSessionResponse struct {
+	api.CreateSession201JSONResponse
+	tokens Tokens
+}
+
+func (r createSessionResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+	w.Header().Add("Set-Cookie", sessionCookie(r.tokens.Session))
+	w.Header().Add("Set-Cookie", csrfCookie(r.tokens.CSRF))
+	return r.CreateSession201JSONResponse.VisitCreateSessionResponse(w)
+}
+
+func csrfCookie(token string) string {
+	c := http.Cookie{
+		Name:     "csrf_token",
+		Value:    token,
+		Path:     "/",
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	}
+	return c.String()
 }
 
 type accountByIDFinder interface {
@@ -74,14 +96,14 @@ func (h *SessionHandler) CreateSession(ctx context.Context, req api.CreateSessio
 		}, nil
 	}
 
-	token, acc, err := h.svc.Login(ctx, req.Body.EmployeeId, req.Body.Password)
+	tokens, acc, err := h.svc.Login(ctx, req.Body.EmployeeId, req.Body.Password)
 	switch {
 	case err == nil:
-		return api.CreateSession201JSONResponse{
-			Body: api.Account{
+		return createSessionResponse{
+			CreateSession201JSONResponse: api.CreateSession201JSONResponse(api.Account{
 				Id: acc.UUID, EmployeeId: acc.EmployeeID, Name: acc.Name, CreatedAt: acc.CreatedAt,
-			},
-			Headers: api.CreateSession201ResponseHeaders{SetCookie: sessionCookie(token)},
+			}),
+			tokens: tokens,
 		}, nil
 	case errors.Is(err, ErrInvalidCredentials):
 		return api.CreateSession401JSONResponse{

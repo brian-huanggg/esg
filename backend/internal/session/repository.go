@@ -24,11 +24,11 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) Create(ctx context.Context, tokenHash []byte, accountID int64) error {
+func (r *Repository) Create(ctx context.Context, tokenHash []byte, csrfHash []byte, accountID int64) error {
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO sessions (token_hash, account_id, expires_at)
-                 VALUES (?, ?, UTC_TIMESTAMP(3) + INTERVAL ? HOUR)`,
-		tokenHash, accountID, absoluteTimeoutHours,
+		`INSERT INTO sessions (token_hash, csrf_token_hash, account_id, expires_at)
+                 VALUES (?, ?,  ?, UTC_TIMESTAMP(3) + INTERVAL ? HOUR)`,
+		tokenHash, csrfHash, accountID, absoluteTimeoutHours,
 	)
 	if err != nil {
 		return fmt.Errorf("insert session: %w", err)

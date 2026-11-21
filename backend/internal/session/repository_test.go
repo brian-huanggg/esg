@@ -40,8 +40,9 @@ func setup(t *testing.T) (*Repository, []byte, int64) {
 
 	sum := sha256.Sum256([]byte("token"))
 	hash := sum[:]
+	csrfSum := sha256.Sum256([]byte("csrf"))
 	repo := NewRepository(testDB)
-	if err := repo.Create(ctx, hash, accountID); err != nil {
+	if err := repo.Create(ctx, hash, csrfSum[:], accountID); err != nil {
 		t.Fatal(err)
 	}
 	return repo, hash, accountID

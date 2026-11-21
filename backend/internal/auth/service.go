@@ -34,7 +34,12 @@ type accountFinder interface {
 }
 
 type sessionCreator interface {
-	Create(ctx context.Context, tokenHash []byte, accountID int64) error
+	Create(ctx context.Context, tokenHash, csrfHash []byte, accountID int64) error
+}
+
+type Tokens struct {
+	Session string
+	CSRF    string
 }
 
 type Service struct {
@@ -42,11 +47,21 @@ type Service struct {
 	sessions sessionCreator
 }
 
+func newToken() (string, []byte, error) {
+	raw := make([]byte, tokenBytes)
+	if _, err := rand.Read(raw); err != nil {
+		return "", nil, fmt.Errorf("generate token: %w", err)
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	sum := sha256.Sum256([]byte(token))
+	return token, sum[:], nil
+}
+
 func NewService(accounts accountFinder, sessions sessionCreator) *Service {
 	return &Service{accounts: accounts, sessions: sessions}
 }
 
-func (s *Service) Login(ctx context.Context, employeeID, password string) (string, *account.Account, error) {
+func (s *Service) Login(ctx context.Context, employeeID, password string) (Tokens, *account.Account, error) {
 	hash := dummyHash
 	acc, err := s.accounts.FindByEmployeeID(ctx, employeeID)
 	switch {
@@ -56,24 +71,25 @@ func (s *Service) Login(ctx context.Context, employeeID, password string) (strin
 		// Keep going with dummyHash.
 	default:
 		// A DB failure is not a credentials problem; do not disguise it.
-		return "", nil, fmt.Errorf("find account: %w", err)
+		return Tokens{}, nil, fmt.Errorf("find account: %w", err)
 	}
 
 	cmpErr := bcrypt.CompareHashAndPassword(hash, []byte(password))
 	if acc == nil || cmpErr != nil {
-		return "", nil, ErrInvalidCredentials
+		return Tokens{}, nil, ErrInvalidCredentials
 	}
 
-	raw := make([]byte, tokenBytes)
-	if _, err := rand.Read(raw); err != nil {
-		return "", nil, fmt.Errorf("generate token: %w", err)
+	sessionToken, sessionHash, err := newToken()
+	if err != nil {
+		return Tokens{}, nil, err
+	}
+	csrfToken, csrfHash, err := newToken()
+	if err != nil {
+		return Tokens{}, nil, err
 	}
 
-	token := base64.RawURLEncoding.EncodeToString(raw)
-
-	sum := sha256.Sum256([]byte(token))
-	if err := s.sessions.Create(ctx, sum[:], acc.ID); err != nil {
-		return "", nil, err
+	if err := s.sessions.Create(ctx, sessionHash, csrfHash, acc.ID); err != nil {
+		return Tokens{}, nil, err
 	}
-	return token, acc, nil
+	return Tokens{Session: sessionToken, CSRF: csrfToken}, acc, nil
 }

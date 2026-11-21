@@ -63,13 +63,9 @@ paths:
               $ref: "#/components/schemas/CreateSessionRequest"
       responses:
         "201":
-          description: Logged in
-          headers:
-            Set-Cookie:
-              required: true
-              description: Session cookie (HttpOnly, SameSite=Lax).
-              schema:
-                type: string
+          description: >
+            Logged in. Sets two cookies: `session` (HttpOnly) and
+            `csrf_token` (readable by JS, echoed back as X-CSRF-Token).
           content:
             application/json:
               schema:

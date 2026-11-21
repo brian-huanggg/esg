@@ -22,12 +22,14 @@ func (f *fakeAccounts) FindByEmployeeID(_ context.Context, _ string) (*account.A
 type fakeSessions struct {
 	called    bool
 	tokenHash []byte
+	csrfHash  []byte
 	accountID int64
 }
 
-func (f *fakeSessions) Create(_ context.Context, tokenHash []byte, accountID int64) error {
+func (f *fakeSessions) Create(_ context.Context, tokenHash []byte, csrfHash []byte, accountID int64) error {
 	f.called = true
 	f.tokenHash = tokenHash
+	f.csrfHash = csrfHash
 	f.accountID = accountID
 	return nil
 }
@@ -45,13 +47,20 @@ func TestLogin_Success(t *testing.T) {
 	sessions := &fakeSessions{}
 	svc := NewService(&fakeAccounts{acc: newAccount(t)}, sessions)
 
-	token, _, err := svc.Login(context.Background(), "123456", "password1")
+	tokens, _, err := svc.Login(context.Background(), "123456", "password1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256([]byte(token))
-	if string(sessions.tokenHash) != string(sum[:]) {
-		t.Error("stored hash is not SHA-256 of the returned token")
+	sessionSum := sha256.Sum256([]byte(tokens.Session))
+	if string(sessions.tokenHash) != string(sessionSum[:]) {
+		t.Error("stored session hash is not SHA-256 of the returned token")
+	}
+	csrfSum := sha256.Sum256([]byte(tokens.CSRF))
+	if string(sessions.csrfHash) != string(csrfSum[:]) {
+		t.Error("stored csrf hash is not SHA-256 of the returned token")
+	}
+	if tokens.Session == tokens.CSRF {
+		t.Error("session and csrf token must be independent")
 	}
 	if sessions.accountID != 7 {
 		t.Errorf("accountID = %d, want 7", sessions.accountID)

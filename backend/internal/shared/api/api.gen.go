@@ -461,23 +461,15 @@ type CreateSessionResponseObject interface {
 	VisitCreateSessionResponse(w http.ResponseWriter) error
 }
 
-type CreateSession201ResponseHeaders struct {
-	SetCookie string
-}
-
-type CreateSession201JSONResponse struct {
-	Body    Account
-	Headers CreateSession201ResponseHeaders
-}
+type CreateSession201JSONResponse Account
 
 func (response CreateSession201JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
 	w.WriteHeader(201)
 	_, err := buf.WriteTo(w)
 	return err

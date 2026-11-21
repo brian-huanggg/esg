@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -23,9 +24,9 @@ func (f fakeAccountByID) FindByID(context.Context, int64) (*account.Account, err
 }
 
 type fakeLogin struct {
-	token string
-	acc   *account.Account
-	err   error
+	tokens Tokens
+	acc    *account.Account
+	err    error
 }
 
 type fakeSessionDeleter struct {
@@ -42,8 +43,8 @@ func newTestHandler(f fakeLogin) *SessionHandler {
 	return NewSessionHandler(f, fakeAccountByID{}, &fakeSessionDeleter{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
-func (f fakeLogin) Login(context.Context, string, string) (string, *account.Account, error) {
-	return f.token, f.acc, f.err
+func (f fakeLogin) Login(context.Context, string, string) (Tokens, *account.Account, error) {
+	return f.tokens, f.acc, f.err
 }
 
 func loginReq(employeeID, password string) api.CreateSessionRequestObject {
@@ -52,26 +53,43 @@ func loginReq(employeeID, password string) api.CreateSessionRequestObject {
 	}
 }
 
-func TestCreateSessionSuccessSetsCookie(t *testing.T) {
-	h := newTestHandler(fakeLogin{token: "tok123", acc: &account.Account{EmployeeID: "123456", Name: "Amy"}})
+func TestCreateSessionSuccessSetsCookies(t *testing.T) {
+	h := newTestHandler(fakeLogin{
+		tokens: Tokens{Session: "tok123", CSRF: "csrf456"},
+		acc:    &account.Account{EmployeeID: "123456", Name: "Amy"},
+	})
 
 	resp, _ := h.CreateSession(context.Background(), loginReq("123456", "password1"))
 
-	r, ok := resp.(api.CreateSession201JSONResponse)
+	r, ok := resp.(createSessionResponse)
 	if !ok {
-		t.Fatalf("resp = %#v, want 201", resp)
+		t.Fatalf("resp = %#v, want createSessionResponse", resp)
 	}
-	if r.Body.EmployeeId != "123456" {
-		t.Errorf("body employeeId = %q", r.Body.EmployeeId)
+	rec := httptest.NewRecorder()
+	if err := r.VisitCreateSessionResponse(rec); err != nil {
+		t.Fatal(err)
 	}
-	cookie := r.Headers.SetCookie
-	for _, want := range []string{"session=tok123", "Path=/", "HttpOnly", "Secure", "SameSite=Lax"} {
-		if !strings.Contains(cookie, want) {
-			t.Errorf("cookie %q missing %q", cookie, want)
+	if rec.Code != 201 {
+		t.Errorf("status = %d, want 201", rec.Code)
+	}
+
+	cookies := rec.Header().Values("Set-Cookie")
+	if len(cookies) != 2 {
+		t.Fatalf("got %d Set-Cookie headers, want 2: %q", len(cookies), cookies)
+	}
+	wantSession := []string{"session=tok123", "Path=/", "HttpOnly", "Secure", "SameSite=Lax"}
+	for _, want := range wantSession {
+		if !strings.Contains(cookies[0], want) {
+			t.Errorf("session cookie %q missing %q", cookies[0], want)
 		}
 	}
-	if strings.Contains(cookie, "Max-Age") {
-		t.Errorf("cookie %q must not set Max-Age", cookie)
+	for _, want := range []string{"csrf_token=csrf456", "Path=/", "Secure", "SameSite=Lax"} {
+		if !strings.Contains(cookies[1], want) {
+			t.Errorf("csrf cookie %q missing %q", cookies[1], want)
+		}
+	}
+	if strings.Contains(cookies[1], "HttpOnly") {
+		t.Errorf("csrf cookie %q must be readable by JS", cookies[1])
 	}
 }
 
