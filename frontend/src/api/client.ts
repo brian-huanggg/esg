@@ -9,6 +9,23 @@ export const api = createClient<paths>({
   baseUrl: window.location.origin,
   fetch: (req) => globalThis.fetch(req),
 })
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+function readCookie(name: string): string | undefined {
+  const prefix = `${name}=`
+  const pair = document.cookie.split('; ').find((c) => c.startsWith(prefix))
+  return pair?.slice(prefix.length)
+}
+
+api.use({
+  onRequest({ request }) {
+    if (SAFE_METHODS.has(request.method)) return
+    const token = readCookie('csrf_token')
+    if (token) request.headers.set('X-CSRF-Token', token)
+  },
+})
+
 export type Health = components['schemas']['Health']
 
 export async function getHealth(): Promise<Health> {

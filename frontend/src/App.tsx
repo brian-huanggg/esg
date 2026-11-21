@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router' // new
 import Register from './pages/Register'
 import { useEffect, useState } from 'react'
 import { getHealth } from './api/client'
+import Login from './pages/Login'
 
 type HealthState =
   | { kind: 'loading' }
@@ -29,6 +30,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/register" element={<Register />} />
+      <Route path="/login" element={<Login />} />
       <Route
         path="/"
         element={
