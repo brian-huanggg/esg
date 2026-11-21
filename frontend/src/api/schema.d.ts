@@ -135,6 +135,15 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description CSRF token missing or invalid. */
+        Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
     };
     parameters: never;
     requestBodies: never;
@@ -277,13 +286,14 @@ export interface operations {
             /** @description Logged out */
             204: {
                 headers: {
-                    /** @description Expires the session cookie (Max-Age=0). */
+                    /** @description Expires the `session` and `csrf_token` cookies (Max-Age=0). */
                     "Set-Cookie": string;
                     [name: string]: unknown;
                 };
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             /** @description Unexpected Error */
             default: {
                 headers: {

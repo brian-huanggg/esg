@@ -75,6 +75,9 @@ type Health struct {
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
 
+// Forbidden defines model for Forbidden.
+type Forbidden = Error
+
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error
 
@@ -310,6 +313,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	return m
 }
+
+type ForbiddenJSONResponse Error
 
 type UnauthorizedJSONResponse Error
 
@@ -551,6 +556,20 @@ func (response DeleteCurrentSession401JSONResponse) VisitDeleteCurrentSessionRes
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCurrentSession403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteCurrentSession403JSONResponse) VisitDeleteCurrentSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }

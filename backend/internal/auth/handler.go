@@ -22,6 +22,15 @@ type createSessionResponse struct {
 	tokens Tokens
 }
 
+type deleteSessionResponse struct{}
+
+func (deleteSessionResponse) VisitDeleteCurrentSessionResponse(w http.ResponseWriter) error {
+	w.Header().Add("Set-Cookie", clearedSessionCookie())
+	w.Header().Add("Set-Cookie", clearedCSRFCookie())
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
 func (r createSessionResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
 	w.Header().Add("Set-Cookie", sessionCookie(r.tokens.Session))
 	w.Header().Add("Set-Cookie", csrfCookie(r.tokens.CSRF))
@@ -83,8 +92,16 @@ func clearedSessionCookie() string {
 	return c.String()
 }
 
-func notImplemented() api.Error {
-	return api.Error{Code: "NOT_IMPLEMENTED", Message: "not implemented"}
+func clearedCSRFCookie() string {
+	c := http.Cookie{
+		Name:     "csrf_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	}
+	return c.String()
 }
 
 func (h *SessionHandler) CreateSession(ctx context.Context, req api.CreateSessionRequestObject) (api.CreateSessionResponseObject, error) {
@@ -135,9 +152,7 @@ func (h *SessionHandler) DeleteCurrentSession(ctx context.Context, _ api.DeleteC
 			Body:       api.Error{Code: "INTERNAL", Message: "internal error", RequestId: requestID},
 		}, nil
 	}
-	return api.DeleteCurrentSession204Response{
-		Headers: api.DeleteCurrentSession204ResponseHeaders{SetCookie: clearedSessionCookie()},
-	}, nil
+	return deleteSessionResponse{}, nil
 }
 
 func (h *SessionHandler) GetCurrentAccount(ctx context.Context, _ api.GetCurrentAccountRequestObject) (api.GetCurrentAccountResponseObject, error) {

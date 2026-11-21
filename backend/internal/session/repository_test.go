@@ -1,6 +1,7 @@
 package session
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -64,8 +65,13 @@ func TestFindActive_Valid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != accountID {
-		t.Errorf("accountID = %d, want %d", got, accountID)
+	if got.AccountID != accountID {
+		t.Errorf("accountID = %d, want %d", got.AccountID, accountID)
+	}
+	// setup() stored sha256("csrf") as the CSRF hash.
+	wantCSRF := sha256.Sum256([]byte("csrf"))
+	if !bytes.Equal(got.CSRFTokenHash, wantCSRF[:]) {
+		t.Errorf("csrf hash = %x, want %x", got.CSRFTokenHash, wantCSRF)
 	}
 }
 

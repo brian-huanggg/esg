@@ -100,11 +100,13 @@ paths:
           headers:
             Set-Cookie:
               required: true
-              description: Expires the session cookie (Max-Age=0).
+              description: Expires the `session` and `csrf_token` cookies (Max-Age=0).
               schema:
                 type: string
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         default:
           description: Unexpected Error
           content:
@@ -142,6 +144,12 @@ components:
   responses:
     Unauthorized:
       description: Not logged in, or the session expired.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: CSRF token missing or invalid.
       content:
         application/json:
           schema:

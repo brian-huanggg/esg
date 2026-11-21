@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -12,32 +13,42 @@ import (
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared/api"
 )
 
-// SessionCookieName is shared with the login handler that sets the cookie.
 const SessionCookieName = "session"
 
 type sessionFinder interface {
-	FindActive(ctx context.Context, tokenHash []byte) (int64, error)
+	FindActive(ctx context.Context, tokenHash []byte) (session.Active, error)
 	Touch(ctx context.Context, tokenHash []byte) error
 }
 
-// Distinct unexported types keep these keys from colliding with ctxKey{}.
 type accountIDKey struct{}
 type tokenHashKey struct{}
 
-// AccountIDFrom returns the logged-in account's BIGINT id; ok is false on
-// routes the middleware did not protect.
 func AccountIDFrom(ctx context.Context) (int64, bool) {
 	id, ok := ctx.Value(accountIDKey{}).(int64)
 	return id, ok
 }
 
-// TokenHashFrom lets logout delete the current session (Step 3.5b).
 func TokenHashFrom(ctx context.Context) ([]byte, bool) {
 	h, ok := ctx.Value(tokenHashKey{}).([]byte)
 	return h, ok
 }
 
-// Authenticate guards only the operations listed in protected.
+const csrfHeader = "X-CSRF-Token"
+
+func isSafeMethod(m string) bool {
+	return m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions
+}
+
+func csrfValid(r *http.Request, wantHash []byte) bool {
+	token := r.Header.Get(csrfHeader)
+	if token == "" {
+		return false
+	}
+	sum := sha256.Sum256([]byte(token))
+	// Constant-time compare so response timing leaks nothing about the stored hash.
+	return subtle.ConstantTimeCompare(sum[:], wantHash) == 1
+}
+
 func Authenticate(sessions sessionFinder, logger *slog.Logger, protected map[string]bool) api.StrictMiddlewareFunc {
 	return func(next api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
 		if !protected[operationID] {
@@ -52,7 +63,7 @@ func Authenticate(sessions sessionFinder, logger *slog.Logger, protected map[str
 			sum := sha256.Sum256([]byte(cookie.Value))
 			hash := sum[:]
 
-			accountID, err := sessions.FindActive(ctx, hash)
+			active, err := sessions.FindActive(ctx, hash)
 			if errors.Is(err, session.ErrNotFound) {
 				writeError(ctx, w, http.StatusUnauthorized, "UNAUTHORIZED", "login required")
 				return nil, nil
@@ -62,11 +73,19 @@ func Authenticate(sessions sessionFinder, logger *slog.Logger, protected map[str
 				writeError(ctx, w, http.StatusInternalServerError, "INTERNAL", "internal error")
 				return nil, nil
 			}
+
+			// Order matters (PRD 5.2): 401 first, then CSRF.
+			if !isSafeMethod(r.Method) && !csrfValid(r, active.CSRFTokenHash) {
+				writeError(ctx, w, http.StatusForbidden, "CSRF_FAILED", "invalid csrf token")
+				return nil, nil
+			}
+
+			// Touch only after CSRF passes, so a forged request cannot keep a session alive.
 			if err := sessions.Touch(ctx, hash); err != nil {
 				logger.ErrorContext(ctx, "touch session failed", "error", err)
 			}
 
-			ctx = context.WithValue(ctx, accountIDKey{}, accountID)
+			ctx = context.WithValue(ctx, accountIDKey{}, active.AccountID)
 			ctx = context.WithValue(ctx, tokenHashKey{}, hash)
 			return next(ctx, w, r, req)
 		}

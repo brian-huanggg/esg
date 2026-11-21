@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -183,9 +184,22 @@ func TestDeleteCurrentSession(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			switch r := resp.(type) {
-			case api.DeleteCurrentSession204Response:
-				if tt.wantType != "204" || !strings.Contains(r.Headers.SetCookie, "Max-Age=0") {
-					t.Errorf("got 204 with cookie %q", r.Headers.SetCookie)
+			case deleteSessionResponse:
+				if tt.wantType != "204" {
+					t.Fatalf("unexpected 204")
+				}
+				rec := httptest.NewRecorder()
+				if err := r.VisitDeleteCurrentSessionResponse(rec); err != nil {
+					t.Fatal(err)
+				}
+				cookies := rec.Result().Cookies()
+				if rec.Code != http.StatusNoContent || len(cookies) != 2 {
+					t.Fatalf("code = %d, cookies = %d, want 204 and 2", rec.Code, len(cookies))
+				}
+				for _, c := range cookies {
+					if c.MaxAge != -1 { // net/http parses Max-Age=0 as -1
+						t.Errorf("cookie %s MaxAge = %d, want expired", c.Name, c.MaxAge)
+					}
 				}
 				if string(fs.deleted) != "hash" {
 					t.Errorf("deleted %q, want hash", fs.deleted)

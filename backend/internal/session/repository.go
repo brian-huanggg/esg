@@ -16,6 +16,11 @@ const (
 	absoluteTimeoutHours = 8
 )
 
+type Active struct {
+	AccountID     int64
+	CSRFTokenHash []byte
+}
+
 type Repository struct {
 	db *sql.DB
 }
@@ -36,22 +41,22 @@ func (r *Repository) Create(ctx context.Context, tokenHash []byte, csrfHash []by
 	return nil
 }
 
-func (r *Repository) FindActive(ctx context.Context, tokenHash []byte) (int64, error) {
-	var accountID int64
+func (r *Repository) FindActive(ctx context.Context, tokenHash []byte) (Active, error) {
+	var a Active
 	err := r.db.QueryRowContext(ctx,
-		`SELECT account_id FROM sessions
+		`SELECT account_id, csrf_token_hash FROM sessions
                  WHERE token_hash = ?
                    AND last_seen_at > UTC_TIMESTAMP(3) - INTERVAL ? MINUTE
                    AND expires_at > UTC_TIMESTAMP(3)`,
 		tokenHash, idleTimeoutMinutes,
-	).Scan(&accountID)
+	).Scan(&a.AccountID, &a.CSRFTokenHash)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, ErrNotFound
+		return Active{}, ErrNotFound
 	}
 	if err != nil {
-		return 0, fmt.Errorf("find session: %w", err)
+		return Active{}, fmt.Errorf("find session: %w", err)
 	}
-	return accountID, nil
+	return a, nil
 }
 
 func (r *Repository) Touch(ctx context.Context, tokenHash []byte) error {
