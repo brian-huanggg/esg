@@ -117,6 +117,9 @@
 - [ ] 驗收條件通過（看學習者貼回的輸出，或你讀檔確認）
 - [ ] `make test` 通過（從 Step 1.3 開始）
 - [ ] 覆蓋率門檻通過（從 Step 1.9 開始）
+- [ ] 這一步有改到 `frontend/`（`git status` 看得到）時，commit 前先跑 `make lint-frontend`
+  和 `make format-frontend`，兩者都通過後再 commit。格式化會改到學習者的程式碼檔，
+  這是學習者同意的例外，只限 Prettier 的格式調整；lint 錯誤只指出位置，不代為修改
 
 接著由你自己執行，不需要學習者手動操作：
 

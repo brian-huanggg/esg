@@ -1,4 +1,4 @@
-.PHONY: run-backend run-frontend test test-backend  cover-html test-frontend gen gen-backend gen-frontend db-up db-down db-exec migrate-up migrate-down
+.PHONY: run-backend run-frontend test test-backend  cover-html test-frontend gen gen-backend gen-frontend db-up db-down db-exec migrate-up migrate-down lint-frontend format-frontend
 
 COVER_MIN ?= 80
 COMPOSE = docker compose --env-file .env -f deploy/compose.yaml
@@ -49,3 +49,9 @@ migrate-up:
 
 migrate-down:
 	$(MIGRATE) down 1
+
+lint-frontend:
+	cd frontend && npm run lint
+
+format-frontend:
+	cd frontend && npx prettier --write .
