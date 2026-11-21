@@ -13,11 +13,13 @@ import (
 )
 
 var ErrEmployeeIDTaken = errors.New("employee id already taken")
+var ErrNotFound = errors.New("account not found")
 
 // mysqlDupEntry is MariaDB's error number for a UNIQUE violation.
 const mysqlDupEntry = 1062
 
 type Account struct {
+	ID           int64
 	UUID         uuid.UUID
 	EmployeeID   string
 	Name         string
@@ -56,4 +58,19 @@ func (r *Repository) Create(ctx context.Context, a *Account) error {
 		return fmt.Errorf("read back created_at: %w", err)
 	}
 	return nil
+}
+
+func (r *Repository) FindByEmployeeID(ctx context.Context, employeeID string) (*Account, error) {
+	a := &Account{}
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, uuid, employee_id, name, password_hash, created_at
+                 FROM accounts WHERE employee_id = ?`, employeeID,
+	).Scan(&a.ID, &a.UUID, &a.EmployeeID, &a.Name, &a.PasswordHash, &a.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find account: %w", err)
+	}
+	return a, nil
 }

@@ -62,3 +62,34 @@ func TestCreate_DuplicateEmployeeID(t *testing.T) {
 		t.Fatalf("err = %v, want ErrEmployeeIDTaken", err)
 	}
 }
+
+func TestFindByEmployeeID_Found(t *testing.T) {
+	dbtest.Reset(t, testDB)
+	ctx := context.Background()
+	repo := NewRepository(testDB)
+
+	created := &Account{EmployeeID: "123456", Name: "Alice", PasswordHash: "hash"}
+	if err := repo.Create(ctx, created); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := repo.FindByEmployeeID(ctx, "123456")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID == 0 {
+		t.Error("ID not filled in")
+	}
+	if got.UUID != created.UUID || got.Name != "Alice" || got.PasswordHash != "hash" {
+		t.Errorf("got %+v, want fields of %+v", got, created)
+	}
+}
+
+func TestFindByEmployeeID_NotFound(t *testing.T) {
+	dbtest.Reset(t, testDB)
+
+	_, err := NewRepository(testDB).FindByEmployeeID(context.Background(), "999999")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
