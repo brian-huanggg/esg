@@ -11,7 +11,7 @@ import (
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared/middleware"
 )
 
-const cookieName = "session"
+const cookieName = middleware.SessionCookieName
 
 type loginService interface {
 	Login(ctx context.Context, employeeID, password string) (string, *account.Account, error)

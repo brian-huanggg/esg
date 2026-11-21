@@ -54,8 +54,15 @@ func newHandler(logger *slog.Logger, db *sql.DB) http.Handler {
 	authSvc := auth.NewService(repo, sessionRepo)
 	sessionHandler := auth.NewSessionHandler(authSvc, logger)
 
+	authMW := middleware.Authenticate(sessionRepo, logger, map[string]bool{
+		"GetCurrentAccount": true,
+	})
+
 	mux := http.NewServeMux()
-	strict := api.NewStrictHandler(server{&shared.HealthHandler{}, accountHandler, sessionHandler}, nil)
+	strict := api.NewStrictHandler(
+		server{&shared.HealthHandler{}, accountHandler, sessionHandler},
+		[]api.StrictMiddlewareFunc{authMW},
+	)
 	api.HandlerFromMux(strict, mux)
 	return middleware.RequestID(middleware.Logging(logger, mux))
 
