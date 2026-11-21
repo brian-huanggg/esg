@@ -17,13 +17,18 @@ type loginService interface {
 	Login(ctx context.Context, employeeID, password string) (string, *account.Account, error)
 }
 
-type SessionHandler struct {
-	svc    loginService
-	logger *slog.Logger
+type accountByIDFinder interface {
+	FindByID(ctx context.Context, id int64) (*account.Account, error)
 }
 
-func NewSessionHandler(svc loginService, logger *slog.Logger) *SessionHandler {
-	return &SessionHandler{svc: svc, logger: logger}
+type SessionHandler struct {
+	svc      loginService
+	accounts accountByIDFinder
+	logger   *slog.Logger
+}
+
+func NewSessionHandler(svc loginService, accounts accountByIDFinder, logger *slog.Logger) *SessionHandler {
+	return &SessionHandler{svc: svc, accounts: accounts, logger: logger}
 }
 
 func sessionCookie(token string) string {
@@ -77,6 +82,30 @@ func (h *SessionHandler) DeleteCurrentSession(_ context.Context, _ api.DeleteCur
 	return api.DeleteCurrentSessiondefaultJSONResponse{StatusCode: 501, Body: notImplemented()}, nil
 }
 
-func (h *SessionHandler) GetCurrentAccount(_ context.Context, _ api.GetCurrentAccountRequestObject) (api.GetCurrentAccountResponseObject, error) {
-	return api.GetCurrentAccountdefaultJSONResponse{StatusCode: 501, Body: notImplemented()}, nil
+func (h *SessionHandler) GetCurrentAccount(ctx context.Context, _ api.GetCurrentAccountRequestObject) (api.GetCurrentAccountResponseObject, error) {
+	requestID := middleware.RequestIDFrom(ctx)
+	unauthorized := api.GetCurrentAccount401JSONResponse{UnauthorizedJSONResponse: api.UnauthorizedJSONResponse{
+		Code: "UNAUTHORIZED", Message: "login required", RequestId: requestID,
+	}}
+
+	id, ok := middleware.AccountIDFrom(ctx)
+	if !ok {
+		return unauthorized, nil
+	}
+
+	acc, err := h.accounts.FindByID(ctx, id)
+	switch {
+	case err == nil:
+		return api.GetCurrentAccount200JSONResponse{
+			Id: acc.UUID, EmployeeId: acc.EmployeeID, Name: acc.Name, CreatedAt: acc.CreatedAt,
+		}, nil
+	case errors.Is(err, account.ErrNotFound):
+		return unauthorized, nil
+	default:
+		h.logger.ErrorContext(ctx, "load current account failed", "error", err)
+		return api.GetCurrentAccountdefaultJSONResponse{
+			StatusCode: 500,
+			Body:       api.Error{Code: "INTERNAL", Message: "internal error", RequestId: requestID},
+		}, nil
+	}
 }

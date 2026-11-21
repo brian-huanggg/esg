@@ -10,7 +10,17 @@ import (
 
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/account"
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared/api"
+	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared/middleware"
 )
+
+type fakeAccountByID struct {
+	acc *account.Account
+	err error
+}
+
+func (f fakeAccountByID) FindByID(context.Context, int64) (*account.Account, error) {
+	return f.acc, f.err
+}
 
 type fakeLogin struct {
 	token string
@@ -18,12 +28,12 @@ type fakeLogin struct {
 	err   error
 }
 
-func (f fakeLogin) Login(context.Context, string, string) (string, *account.Account, error) {
-	return f.token, f.acc, f.err
+func newTestHandler(f fakeLogin) *SessionHandler {
+	return NewSessionHandler(f, fakeAccountByID{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
-func newTestHandler(f fakeLogin) *SessionHandler {
-	return NewSessionHandler(f, slog.New(slog.NewTextHandler(io.Discard, nil)))
+func (f fakeLogin) Login(context.Context, string, string) (string, *account.Account, error) {
+	return f.token, f.acc, f.err
 }
 
 func loginReq(employeeID, password string) api.CreateSessionRequestObject {
@@ -91,9 +101,44 @@ func TestStubsReturn501(t *testing.T) {
 	if r, ok := del.(api.DeleteCurrentSessiondefaultJSONResponse); !ok || r.StatusCode != 501 {
 		t.Errorf("DeleteCurrentSession = %#v, want 501 default response", del)
 	}
+}
 
-	me, _ := h.GetCurrentAccount(ctx, api.GetCurrentAccountRequestObject{})
-	if r, ok := me.(api.GetCurrentAccountdefaultJSONResponse); !ok || r.StatusCode != 501 {
-		t.Errorf("GetCurrentAccount = %#v, want 501 default response", me)
+func TestGetCurrentAccount(t *testing.T) {
+	found := &account.Account{EmployeeID: "123456", Name: "Amy"}
+	tests := []struct {
+		name  string
+		ctx   context.Context
+		accts fakeAccountByID
+		check func(api.GetCurrentAccountResponseObject) bool
+	}{
+		{"found", middleware.WithAccountID(context.Background(), 7), fakeAccountByID{acc: found},
+			func(r api.GetCurrentAccountResponseObject) bool {
+				ok200, ok := r.(api.GetCurrentAccount200JSONResponse)
+				return ok && ok200.EmployeeId == "123456"
+			}},
+		{"no account id in ctx", context.Background(), fakeAccountByID{},
+			func(r api.GetCurrentAccountResponseObject) bool {
+				_, ok := r.(api.GetCurrentAccount401JSONResponse)
+				return ok
+			}},
+		{"account deleted", middleware.WithAccountID(context.Background(), 7), fakeAccountByID{err: account.ErrNotFound},
+			func(r api.GetCurrentAccountResponseObject) bool {
+				_, ok := r.(api.GetCurrentAccount401JSONResponse)
+				return ok
+			}},
+		{"db failure", middleware.WithAccountID(context.Background(), 7), fakeAccountByID{err: errors.New("db down")},
+			func(r api.GetCurrentAccountResponseObject) bool {
+				d, ok := r.(api.GetCurrentAccountdefaultJSONResponse)
+				return ok && d.StatusCode == 500
+			}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewSessionHandler(fakeLogin{}, tt.accts, slog.New(slog.NewTextHandler(io.Discard, nil)))
+			resp, _ := h.GetCurrentAccount(tt.ctx, api.GetCurrentAccountRequestObject{})
+			if !tt.check(resp) {
+				t.Errorf("unexpected response %#v", resp)
+			}
+		})
 	}
 }

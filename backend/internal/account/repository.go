@@ -74,3 +74,18 @@ func (r *Repository) FindByEmployeeID(ctx context.Context, employeeID string) (*
 	}
 	return a, nil
 }
+
+func (r *Repository) FindByID(ctx context.Context, id int64) (*Account, error) {
+	a := &Account{}
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, uuid, employee_id, name, password_hash, created_at
+                 FROM accounts WHERE id = ?`, id,
+	).Scan(&a.ID, &a.UUID, &a.EmployeeID, &a.Name, &a.PasswordHash, &a.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find account by id: %w", err)
+	}
+	return a, nil
+}

@@ -93,3 +93,35 @@ func TestFindByEmployeeID_NotFound(t *testing.T) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }
+
+func TestFindByID_Found(t *testing.T) {
+	dbtest.Reset(t, testDB)
+	ctx := context.Background()
+	repo := NewRepository(testDB)
+
+	if err := repo.Create(ctx, &Account{EmployeeID: "123456", Name: "Alice", PasswordHash: "hash"}); err != nil {
+		t.Fatal(err)
+	}
+	// Create does not return the BIGINT id, so look it up the same way login does.
+	byEmp, err := repo.FindByEmployeeID(ctx, "123456")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := repo.FindByID(ctx, byEmp.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UUID != byEmp.UUID || got.Name != "Alice" {
+		t.Errorf("got %+v, want %+v", got, byEmp)
+	}
+}
+
+func TestFindByID_NotFound(t *testing.T) {
+	dbtest.Reset(t, testDB)
+
+	_, err := NewRepository(testDB).FindByID(context.Background(), 999999)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}

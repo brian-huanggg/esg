@@ -78,3 +78,7 @@ func writeError(ctx context.Context, w http.ResponseWriter, status int, code, ms
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(api.Error{Code: code, Message: msg, RequestId: RequestIDFrom(ctx)})
 }
+
+func WithAccountID(ctx context.Context, id int64) context.Context {
+	return context.WithValue(ctx, accountIDKey{}, id)
+}
