@@ -1,0 +1,8 @@
+# Keep the build context small and free of local artifacts.
+coverage.out
+coverage.html
+Dockerfile
+.dockerignore
+*_test.go
+.env
+.env.*
