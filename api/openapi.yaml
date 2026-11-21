@@ -77,7 +77,7 @@ components:
         password:
           type: string
           minLength: 1
-          maxLength: 75
+          maxLength: 72
     Account:
       type: object
       required:

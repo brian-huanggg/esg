@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
@@ -21,6 +22,7 @@ type Account struct {
 	EmployeeID   string
 	Name         string
 	PasswordHash string
+	CreatedAt    time.Time
 }
 
 type Repository struct {
@@ -46,6 +48,12 @@ func (r *Repository) Create(ctx context.Context, a *Account) error {
 			return ErrEmployeeIDTaken
 		}
 		return fmt.Errorf("insert account: %w", err)
+	}
+	err = r.db.QueryRowContext(ctx,
+		`SELECT created_at FROM accounts WHERE uuid = ?`, a.UUID.String(),
+	).Scan(&a.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("read back created_at: %w", err)
 	}
 	return nil
 }

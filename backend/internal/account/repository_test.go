@@ -41,6 +41,9 @@ func TestCreate_Success(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if a.CreatedAt.IsZero() {
+		t.Error("CreatedAt not filled in")
+	}
 	if name != "Alice" {
 		t.Errorf("name = %q, want Alice", name)
 	}
