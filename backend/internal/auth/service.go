@@ -46,7 +46,7 @@ func NewService(accounts accountFinder, sessions sessionCreator) *Service {
 	return &Service{accounts: accounts, sessions: sessions}
 }
 
-func (s *Service) Login(ctx context.Context, employeeID, password string) (string, error) {
+func (s *Service) Login(ctx context.Context, employeeID, password string) (string, *account.Account, error) {
 	hash := dummyHash
 	acc, err := s.accounts.FindByEmployeeID(ctx, employeeID)
 	switch {
@@ -56,24 +56,24 @@ func (s *Service) Login(ctx context.Context, employeeID, password string) (strin
 		// Keep going with dummyHash.
 	default:
 		// A DB failure is not a credentials problem; do not disguise it.
-		return "", fmt.Errorf("find account: %w", err)
+		return "", nil, fmt.Errorf("find account: %w", err)
 	}
 
 	cmpErr := bcrypt.CompareHashAndPassword(hash, []byte(password))
 	if acc == nil || cmpErr != nil {
-		return "", ErrInvalidCredentials
+		return "", nil, ErrInvalidCredentials
 	}
 
 	raw := make([]byte, tokenBytes)
 	if _, err := rand.Read(raw); err != nil {
-		return "", fmt.Errorf("generate token: %w", err)
+		return "", nil, fmt.Errorf("generate token: %w", err)
 	}
 
 	token := base64.RawURLEncoding.EncodeToString(raw)
 
 	sum := sha256.Sum256([]byte(token))
 	if err := s.sessions.Create(ctx, sum[:], acc.ID); err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return token, nil
+	return token, acc, nil
 }

@@ -45,7 +45,7 @@ func TestLogin_Success(t *testing.T) {
 	sessions := &fakeSessions{}
 	svc := NewService(&fakeAccounts{acc: newAccount(t)}, sessions)
 
-	token, err := svc.Login(context.Background(), "123456", "password1")
+	token, _, err := svc.Login(context.Background(), "123456", "password1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestLogin_Failures(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sessions := &fakeSessions{}
-			_, err := NewService(tt.accounts, sessions).Login(context.Background(), "123456", tt.password)
+			_, _, err := NewService(tt.accounts, sessions).Login(context.Background(), "123456", tt.password)
 			if !errors.Is(err, ErrInvalidCredentials) {
 				t.Fatalf("err = %v, want ErrInvalidCredentials", err)
 			}
@@ -85,7 +85,7 @@ func TestLogin_DBErrorIsNotCredentialsError(t *testing.T) {
 	boom := errors.New("db down")
 	svc := NewService(&fakeAccounts{err: boom}, &fakeSessions{})
 
-	_, err := svc.Login(context.Background(), "123456", "password1")
+	_, _, err := svc.Login(context.Background(), "123456", "password1")
 	if !errors.Is(err, boom) || errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("err = %v, want wrapped db error", err)
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/account"
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/auth"
+	"github.com/brian-huanggg/esg-award-registration/backend/internal/session"
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared"
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared/api"
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared/middleware"
@@ -49,8 +50,12 @@ func newHandler(logger *slog.Logger, db *sql.DB) http.Handler {
 	svc := account.NewService(repo)
 	accountHandler := account.NewHandler(svc, logger)
 
+	sessionRepo := session.NewRepository(db)
+	authSvc := auth.NewService(repo, sessionRepo)
+	sessionHandler := auth.NewSessionHandler(authSvc, logger)
+
 	mux := http.NewServeMux()
-	strict := api.NewStrictHandler(server{&shared.HealthHandler{}, accountHandler, &auth.SessionHandler{}}, nil)
+	strict := api.NewStrictHandler(server{&shared.HealthHandler{}, accountHandler, sessionHandler}, nil)
 	api.HandlerFromMux(strict, mux)
 	return middleware.RequestID(middleware.Logging(logger, mux))
 

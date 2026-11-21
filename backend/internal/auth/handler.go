@@ -2,20 +2,75 @@ package auth
 
 import (
 	"context"
+	"errors"
+	"log/slog"
+	"net/http"
 
+	"github.com/brian-huanggg/esg-award-registration/backend/internal/account"
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared/api"
+	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared/middleware"
 )
 
-// SessionHandler is named explicitly: embedding it next to account.Handler in
-// main.go would give two fields called "Handler", which does not compile.
-type SessionHandler struct{}
+const cookieName = "session"
+
+type loginService interface {
+	Login(ctx context.Context, employeeID, password string) (string, *account.Account, error)
+}
+
+type SessionHandler struct {
+	svc    loginService
+	logger *slog.Logger
+}
+
+func NewSessionHandler(svc loginService, logger *slog.Logger) *SessionHandler {
+	return &SessionHandler{svc: svc, logger: logger}
+}
+
+func sessionCookie(token string) string {
+	c := http.Cookie{
+		Name:     cookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	}
+	return c.String()
+}
 
 func notImplemented() api.Error {
 	return api.Error{Code: "NOT_IMPLEMENTED", Message: "not implemented"}
 }
 
-func (h *SessionHandler) CreateSession(_ context.Context, _ api.CreateSessionRequestObject) (api.CreateSessionResponseObject, error) {
-	return api.CreateSessiondefaultJSONResponse{StatusCode: 501, Body: notImplemented()}, nil
+func (h *SessionHandler) CreateSession(ctx context.Context, req api.CreateSessionRequestObject) (api.CreateSessionResponseObject, error) {
+	requestID := middleware.RequestIDFrom(ctx)
+
+	if req.Body.EmployeeId == "" || req.Body.Password == "" {
+		return api.CreateSession422JSONResponse{
+			Code: "VALIDATION_FAILED", Message: "validation failed", RequestId: requestID,
+		}, nil
+	}
+
+	token, acc, err := h.svc.Login(ctx, req.Body.EmployeeId, req.Body.Password)
+	switch {
+	case err == nil:
+		return api.CreateSession201JSONResponse{
+			Body: api.Account{
+				Id: acc.UUID, EmployeeId: acc.EmployeeID, Name: acc.Name, CreatedAt: acc.CreatedAt,
+			},
+			Headers: api.CreateSession201ResponseHeaders{SetCookie: sessionCookie(token)},
+		}, nil
+	case errors.Is(err, ErrInvalidCredentials):
+		return api.CreateSession401JSONResponse{
+			Code: "INVALID_CREDENTIALS", Message: "wrong employee id or password", RequestId: requestID,
+		}, nil
+	default:
+		h.logger.ErrorContext(ctx, "login failed", "error", err)
+		return api.CreateSessiondefaultJSONResponse{
+			StatusCode: 500,
+			Body:       api.Error{Code: "INTERNAL", Message: "internal error", RequestId: requestID},
+		}, nil
+	}
 }
 
 func (h *SessionHandler) DeleteCurrentSession(_ context.Context, _ api.DeleteCurrentSessionRequestObject) (api.DeleteCurrentSessionResponseObject, error) {
