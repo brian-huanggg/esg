@@ -1,4 +1,4 @@
-.PHONY: run-backend run-frontend test test-backend  cover-html test-frontend gen gen-backend gen-frontend db-up db-down migrate-up migrate-down
+.PHONY: run-backend run-frontend test test-backend  cover-html test-frontend gen gen-backend gen-frontend db-up db-down db-exec migrate-up migrate-down
 
 COVER_MIN ?= 80
 COMPOSE = docker compose --env-file .env -f deploy/compose.yaml
@@ -27,7 +27,6 @@ cover-html: test-backend
 test-frontend:
 	cd frontend && npm test
 
-
 gen: gen-backend gen-frontend
 
 gen-backend:
@@ -41,6 +40,9 @@ db-up:
 
 db-down:
 	$(COMPOSE) down
+
+db-exec:
+	$(COMPOSE) exec db mariadb -u esg -p
 
 migrate-up:
 	$(MIGRATE) up
