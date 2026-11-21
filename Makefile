@@ -1,4 +1,4 @@
-.PHONY: run-backend run-frontend test test-backend test-frontend gen gen-backend gen-frontend db-up db-down migrate-up migrate-down
+.PHONY: run-backend run-frontend test test-backend  cover-html test-frontend gen gen-backend gen-frontend db-up db-down migrate-up migrate-down
 
 COVER_MIN ?= 80
 COMPOSE = docker compose --env-file .env -f deploy/compose.yaml
@@ -21,8 +21,12 @@ test-backend:
 			'/^total:/ { sub(/%/, "", $$3); printf "backend coverage: %s%% (min %s%%)\n", $$3, min; \
 			if ($$3 + 0 < min) { print "FAIL: backend coverage below threshold"; exit 1 } }'
 
+cover-html: test-backend
+	cd backend && go tool cover -html=coverage.out -o coverage.html
+
 test-frontend:
 	cd frontend && npm test
+
 
 gen: gen-backend gen-frontend
 

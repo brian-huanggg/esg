@@ -10,6 +10,7 @@ kubeconfig
 # --- Build outputs: reproducible, so never versioned ---
 /bin/
 coverage.out
+coverage.html
 node_modules/
 notes/.vitepress/cache/
 dist/
