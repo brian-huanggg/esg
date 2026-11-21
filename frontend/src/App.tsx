@@ -1,8 +1,10 @@
-import { Route, Routes } from 'react-router' // new
+import { Route, Routes } from 'react-router'
 import Register from './pages/Register'
+import Login from './pages/Login'
+import RequireAuth from './auth/RequireAuth'
+import { useAuth } from './auth/context'
 import { useEffect, useState } from 'react'
 import { getHealth } from './api/client'
-import Login from './pages/Login'
 
 type HealthState =
   | { kind: 'loading' }
@@ -11,6 +13,7 @@ type HealthState =
 
 export default function App() {
   const [health, setHealth] = useState<HealthState>({ kind: 'loading' })
+  const { logout } = useAuth()
 
   useEffect(() => {
     let cancelled = false
@@ -31,17 +34,22 @@ export default function App() {
     <Routes>
       <Route path="/register" element={<Register />} />
       <Route path="/login" element={<Login />} />
-      <Route
-        path="/"
-        element={
-          <>
-            <h1>ESG Idea Contest</h1>
-            {health.kind === 'loading' && <p>Backend: loading...</p>}
-            {health.kind === 'ok' && <p>Backend: {health.status}</p>}
-            {health.kind === 'error' && <p>Backend: error {health.message}</p>}
-          </>
-        }
-      />
+      <Route element={<RequireAuth />}>
+        <Route
+          path="/"
+          element={
+            <>
+              <h1>ESG Idea Contest</h1>
+              <button onClick={() => void logout()}>Logout</button>
+              {health.kind === 'loading' && <p>Backend: loading...</p>}
+              {health.kind === 'ok' && <p>Backend: {health.status}</p>}
+              {health.kind === 'error' && (
+                <p>Backend: error {health.message}</p>
+              )}
+            </>
+          }
+        />
+      </Route>
     </Routes>
   )
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { api } from '../api/client'
+import { useAuth } from '../auth/context'
 
 export default function Login() {
   const [employeeId, setEmployeeId] = useState('')
@@ -8,16 +9,18 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
+  const { login } = useAuth()
 
   async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     setError('')
     setSubmitting(true)
     try {
-      const { error: apiError } = await api.POST('/api/sessions', {
+      const { data, error: apiError } = await api.POST('/api/sessions', {
         body: { employeeId, password },
       })
-      if (!apiError) {
+      if (data) {
+        login(data)
         navigate('/')
         return
       }
