@@ -3,8 +3,8 @@
 > 每次整份覆寫，上限 20 行。哪些步驟做完了看 `git tag`，歷史看 `git log`。
 
 ## 目前
-- 下一步：Step 2.7 account service：驗證與 bcrypt（見 ROADMAP）
-- 最新 tag：step-02-06
+- 下一步：Step 2.8 handler 接上 service，後端完整可用（見 ROADMAP）
+- 最新 tag：step-02-07
 
 ## 卡住的地方
 - （無）
@@ -14,6 +14,6 @@
 - `origin` 是 `git@github.com:brian-huanggg/esg.git`（SSH），CI 已在這個 repo 跑通
 
 ## 最近的注意事項（最多 3 條）
-- `account.Handler.CreateAccount` 目前是 501 stub（借用 `default` response），Step 2.7 之後換成真實作並手寫 422 驗證；密碼規則暫定 8–72 字元
-- `Repository.Create` 靠 MariaDB error 1062 加上 key 名稱 `uq_accounts_employee_id` 判斷工號重複，migration 裡的 UNIQUE 名稱不能改
-- 整合測試用 `dbtest.Start`（每個 package 的 `TestMain` 呼叫一次）加每個測試開頭 `dbtest.Reset`；需要 Docker
+- `account.Service.Register` 回 `*ValidationError`（`Fields []FieldError`，欄位名 `employeeId` / `name` / `password`）；2.8 handler 要對應成 422，`ErrEmployeeIDTaken` 對應 409
+- `account.Handler.CreateAccount` 仍是 501 stub（借用 `default` response），2.8 換成真實作；`main.go` 要手動 `NewRepository` → `NewService` → Handler
+- 密碼規則 8–72 bytes、姓名 trim 後 1–100 字元；`Repository.Create` 靠 key 名稱 `uq_accounts_employee_id` 判斷重複，migration 的 UNIQUE 名稱不能改
