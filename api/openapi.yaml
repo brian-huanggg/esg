@@ -14,6 +14,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Health"
+  /api/accounts:
+    post:
+      operationId: createAccount
+      summary: Register a new account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountRequest"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "409":
+          description: Employee id already registered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        
+      deprecated: false
 components:
   schemas:
     Health:
@@ -23,3 +60,66 @@ components:
         status:
           type: string
           enum: [ok]
+    CreateAccountRequest:
+      type: object
+      required:
+        - employeeId
+        - name
+        - password
+      properties:
+        employeeId:
+          type: string
+          pattern: "^[0-9]{6}$"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        password:
+          type: string
+          minLength: 1
+          maxLength: 75
+    Account:
+      type: object
+      required:
+        - id
+        - employeeId
+        - name
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        employeeId:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    FieldError:
+      type: object
+      required:
+        - field
+        - message
+      properties:
+        field:
+          type: string
+        message:
+          type: string
+    Error:
+      type: object
+      required:
+        - code
+        - message
+        - requestId
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        requestId:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"

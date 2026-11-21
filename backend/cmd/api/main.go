@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/brian-huanggg/esg-award-registration/backend/internal/account"
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared"
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared/api"
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared/middleware"
@@ -35,9 +36,14 @@ func run(logger *slog.Logger) error {
 	return http.ListenAndServe(":8080", newHandler(logger))
 }
 
+type server struct {
+	*shared.HealthHandler
+	*account.Handler
+}
+
 func newHandler(logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
-	strict := api.NewStrictHandler(&shared.HealthHandler{}, nil)
+	strict := api.NewStrictHandler(server{&shared.HealthHandler{}, &account.Handler{}}, nil)
 	api.HandlerFromMux(strict, mux)
 	return middleware.RequestID(middleware.Logging(logger, mux))
 }
