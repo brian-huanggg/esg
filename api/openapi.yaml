@@ -135,6 +135,64 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
   /api/proposals:
+    get:
+      operationId: listProposals
+      summary: List the logged-in account's proposals
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [createdAt, updatedAt, title]
+            default: createdAt
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: q
+          in: query
+          description: Case-insensitive substring of the title.
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        "200":
+          description: One page of proposals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: A query parameter is invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       operationId: createProposal
       summary: Create a proposal led by the logged-in account
@@ -342,6 +400,17 @@ components:
         updatedAt:
           type: string
           format: date-time
+    ProposalList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Proposal"
+        total:
+          type: integer
+          description: Number of proposals matching the filter, across all pages.
     FieldError:
       type: object
       required:

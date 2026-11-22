@@ -64,6 +64,14 @@ func (h *ProposalHandler) GetProposal(ctx context.Context, req api.GetProposalRe
 	}, nil
 }
 
+// ListProposals is a stub until Step 5.7 wires the service and handler.
+func (h *ProposalHandler) ListProposals(ctx context.Context, req api.ListProposalsRequestObject) (api.ListProposalsResponseObject, error) {
+	return api.ListProposalsdefaultJSONResponse{
+		StatusCode: http.StatusNotImplemented,
+		Body:       api.Error{Code: "NOT_IMPLEMENTED", Message: "not implemented", RequestId: middleware.RequestIDFrom(ctx)},
+	}, nil
+}
+
 func (h *ProposalHandler) createErrorResponse(ctx context.Context, err error) api.CreateProposalResponseObject {
 	requestID := middleware.RequestIDFrom(ctx)
 

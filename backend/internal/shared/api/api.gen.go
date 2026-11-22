@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -26,6 +27,45 @@ const (
 func (e HealthStatus) Valid() bool {
 	switch e {
 	case Ok:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListProposalsParamsSort.
+const (
+	CreatedAt ListProposalsParamsSort = "createdAt"
+	Title     ListProposalsParamsSort = "title"
+	UpdatedAt ListProposalsParamsSort = "updatedAt"
+)
+
+// Valid indicates whether the value is a known member of the ListProposalsParamsSort enum.
+func (e ListProposalsParamsSort) Valid() bool {
+	switch e {
+	case CreatedAt:
+		return true
+	case Title:
+		return true
+	case UpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListProposalsParamsOrder.
+const (
+	Asc  ListProposalsParamsOrder = "asc"
+	Desc ListProposalsParamsOrder = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListProposalsParamsOrder enum.
+func (e ListProposalsParamsOrder) Valid() bool {
+	switch e {
+	case Asc:
+		return true
+	case Desc:
 		return true
 	default:
 		return false
@@ -90,6 +130,14 @@ type Proposal struct {
 	UpdatedAt   time.Time          `json:"updatedAt"`
 }
 
+// ProposalList defines model for ProposalList.
+type ProposalList struct {
+	Items []Proposal `json:"items"`
+
+	// Total Number of proposals matching the filter, across all pages.
+	Total int `json:"total"`
+}
+
 // Forbidden defines model for Forbidden.
 type Forbidden = Error
 
@@ -98,6 +146,23 @@ type NotFound = Error
 
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error
+
+// ListProposalsParams defines parameters for ListProposals.
+type ListProposalsParams struct {
+	Page     *int                      `form:"page,omitempty" json:"page,omitempty"`
+	PageSize *int                      `form:"page_size,omitempty" json:"page_size,omitempty"`
+	Sort     *ListProposalsParamsSort  `form:"sort,omitempty" json:"sort,omitempty"`
+	Order    *ListProposalsParamsOrder `form:"order,omitempty" json:"order,omitempty"`
+
+	// Q Case-insensitive substring of the title.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+}
+
+// ListProposalsParamsSort defines parameters for ListProposals.
+type ListProposalsParamsSort string
+
+// ListProposalsParamsOrder defines parameters for ListProposals.
+type ListProposalsParamsOrder string
 
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = CreateAccountRequest
@@ -119,6 +184,9 @@ type ServerInterface interface {
 	// GetHealth Liveness check
 	// (GET /api/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// ListProposals List the logged-in account's proposals
+	// (GET /api/proposals)
+	ListProposals(w http.ResponseWriter, r *http.Request, params ListProposalsParams)
 	// CreateProposal Create a proposal led by the logged-in account
 	// (POST /api/proposals)
 	CreateProposal(w http.ResponseWriter, r *http.Request)
@@ -175,6 +243,91 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListProposals operation middleware
+func (siw *ServerInterfaceWrapper) ListProposals(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListProposalsParams
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page_size" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page_size", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page_size"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page_size", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "order" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "order", r.URL.Query(), &params.Order, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "order"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "order", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProposals(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -377,6 +530,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/sessions", wrapper.CreateSession)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/sessions/current", wrapper.DeleteCurrentSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/accounts/me", wrapper.GetCurrentAccount)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/proposals", wrapper.ListProposals)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/proposals", wrapper.CreateProposal)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/proposals/{id}", wrapper.GetProposal)
 
@@ -525,6 +679,73 @@ func (response GetHealth200JSONResponse) VisitGetHealthResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProposalsRequestObject struct {
+	Params ListProposalsParams
+}
+
+type ListProposalsResponseObject interface {
+	VisitListProposalsResponse(w http.ResponseWriter) error
+}
+
+type ListProposals200JSONResponse ProposalList
+
+func (response ListProposals200JSONResponse) VisitListProposalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProposals401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListProposals401JSONResponse) VisitListProposalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProposals422JSONResponse Error
+
+func (response ListProposals422JSONResponse) VisitListProposalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProposalsdefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response ListProposalsdefaultJSONResponse) VisitListProposalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -853,6 +1074,9 @@ type StrictServerInterface interface {
 	// GetHealth Liveness check
 	// (GET /api/health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
+	// ListProposals List the logged-in account's proposals
+	// (GET /api/proposals)
+	ListProposals(ctx context.Context, request ListProposalsRequestObject) (ListProposalsResponseObject, error)
 	// CreateProposal Create a proposal led by the logged-in account
 	// (POST /api/proposals)
 	CreateProposal(ctx context.Context, request CreateProposalRequestObject) (CreateProposalResponseObject, error)
@@ -978,6 +1202,32 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetHealthResponseObject); ok {
 		if err := validResponse.VisitGetHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListProposals operation middleware
+func (sh *strictHandler) ListProposals(w http.ResponseWriter, r *http.Request, params ListProposalsParams) {
+	var request ListProposalsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListProposals(ctx, request.(ListProposalsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListProposals")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListProposalsResponseObject); ok {
+		if err := validResponse.VisitListProposalsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -96,7 +96,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List the logged-in account's proposals */
+        get: operations["listProposals"];
         put?: never;
         /** Create a proposal led by the logged-in account */
         post: operations["createProposal"];
@@ -163,6 +164,11 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        ProposalList: {
+            items: components["schemas"]["Proposal"][];
+            /** @description Number of proposals matching the filter, across all pages. */
+            total: number;
         };
         FieldError: {
             field: string;
@@ -386,6 +392,52 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            /** @description Unexpected Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listProposals: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                sort?: "createdAt" | "updatedAt" | "title";
+                order?: "asc" | "desc";
+                /** @description Case-insensitive substring of the title. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of proposals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description A query parameter is invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Unexpected Error */
             default: {
                 headers: {
