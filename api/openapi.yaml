@@ -134,8 +134,98 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/proposals:
+    post:
+      operationId: createProposal
+      summary: Create a proposal led by the logged-in account
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProposalRequest"
+      responses:
+        "201":
+          description: Proposal created
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              required: true
+              description: URL of the new proposal, e.g. /api/proposals/{id}.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proposal"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: This leader already has a proposal with the same title.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/proposals/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getProposal
+      summary: Get one proposal
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: The proposal
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proposal"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        default:
+          description: Unexpected Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
 components:
+  headers:
+    ETag:
+      required: true
+      description: >
+        Strong validator built from the proposal version, e.g. "3" (with quotes).
+        Send it back as If-Match on writes.
+      schema:
+        type: string
   securitySchemes:
     cookieAuth:
       type: apiKey
@@ -150,6 +240,14 @@ components:
             $ref: "#/components/schemas/Error"
     Forbidden:
       description: CSRF token missing or invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: >
+        Does not exist, or the caller may not see it. Both return 404
+        so the response does not reveal which ids exist.
       content:
         application/json:
           schema:
@@ -207,6 +305,41 @@ components:
         name:
           type: string
         createdAt:
+          type: string
+          format: date-time
+    CreateProposalRequest:
+      type: object
+      required:
+        - title
+        - description
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 2000
+    Proposal:
+      type: object
+      required:
+        - id
+        - title
+        - description
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
           type: string
           format: date-time
     FieldError:

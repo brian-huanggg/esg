@@ -47,6 +47,12 @@ type CreateAccountRequest struct {
 	Password   string `json:"password"`
 }
 
+// CreateProposalRequest defines model for CreateProposalRequest.
+type CreateProposalRequest struct {
+	Description string `json:"description"`
+	Title       string `json:"title"`
+}
+
 // CreateSessionRequest defines model for CreateSessionRequest.
 type CreateSessionRequest struct {
 	EmployeeId string `json:"employeeId"`
@@ -75,14 +81,29 @@ type Health struct {
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
 
+// Proposal defines model for Proposal.
+type Proposal struct {
+	CreatedAt   time.Time          `json:"createdAt"`
+	Description string             `json:"description"`
+	Id          openapi_types.UUID `json:"id"`
+	Title       string             `json:"title"`
+	UpdatedAt   time.Time          `json:"updatedAt"`
+}
+
 // Forbidden defines model for Forbidden.
 type Forbidden = Error
+
+// NotFound defines model for NotFound.
+type NotFound = Error
 
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error
 
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = CreateAccountRequest
+
+// CreateProposalJSONRequestBody defines body for CreateProposal for application/json ContentType.
+type CreateProposalJSONRequestBody = CreateProposalRequest
 
 // CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
 type CreateSessionJSONRequestBody = CreateSessionRequest
@@ -98,6 +119,12 @@ type ServerInterface interface {
 	// GetHealth Liveness check
 	// (GET /api/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// CreateProposal Create a proposal led by the logged-in account
+	// (POST /api/proposals)
+	CreateProposal(w http.ResponseWriter, r *http.Request)
+	// GetProposal Get one proposal
+	// (GET /api/proposals/{id})
+	GetProposal(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// CreateSession Log in (create a session)
 	// (POST /api/sessions)
 	CreateSession(w http.ResponseWriter, r *http.Request)
@@ -148,6 +175,46 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateProposal operation middleware
+func (siw *ServerInterfaceWrapper) CreateProposal(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateProposal(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProposal operation middleware
+func (siw *ServerInterfaceWrapper) GetProposal(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProposal(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -310,11 +377,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/sessions", wrapper.CreateSession)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/sessions/current", wrapper.DeleteCurrentSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/accounts/me", wrapper.GetCurrentAccount)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/proposals", wrapper.CreateProposal)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/proposals/{id}", wrapper.GetProposal)
 
 	return m
 }
 
 type ForbiddenJSONResponse Error
+
+type NotFoundJSONResponse Error
 
 type UnauthorizedJSONResponse Error
 
@@ -454,6 +525,186 @@ func (response GetHealth200JSONResponse) VisitGetHealthResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateProposalRequestObject struct {
+	Body *CreateProposalJSONRequestBody
+}
+
+type CreateProposalResponseObject interface {
+	VisitCreateProposalResponse(w http.ResponseWriter) error
+}
+
+type CreateProposal201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type CreateProposal201JSONResponse struct {
+	Body    Proposal
+	Headers CreateProposal201ResponseHeaders
+}
+
+func (response CreateProposal201JSONResponse) VisitCreateProposalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateProposal401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateProposal401JSONResponse) VisitCreateProposalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateProposal403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateProposal403JSONResponse) VisitCreateProposalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateProposal409JSONResponse Error
+
+func (response CreateProposal409JSONResponse) VisitCreateProposalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateProposal422JSONResponse Error
+
+func (response CreateProposal422JSONResponse) VisitCreateProposalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateProposaldefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response CreateProposaldefaultJSONResponse) VisitCreateProposalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProposalRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type GetProposalResponseObject interface {
+	VisitGetProposalResponse(w http.ResponseWriter) error
+}
+
+type GetProposal200ResponseHeaders struct {
+	ETag string
+}
+
+type GetProposal200JSONResponse struct {
+	Body    Proposal
+	Headers GetProposal200ResponseHeaders
+}
+
+func (response GetProposal200JSONResponse) VisitGetProposalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProposal401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetProposal401JSONResponse) VisitGetProposalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProposal404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetProposal404JSONResponse) VisitGetProposalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProposaldefaultJSONResponse struct {
+	Body       Error
+	StatusCode int
+}
+
+func (response GetProposaldefaultJSONResponse) VisitGetProposalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -602,6 +853,12 @@ type StrictServerInterface interface {
 	// GetHealth Liveness check
 	// (GET /api/health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
+	// CreateProposal Create a proposal led by the logged-in account
+	// (POST /api/proposals)
+	CreateProposal(ctx context.Context, request CreateProposalRequestObject) (CreateProposalResponseObject, error)
+	// GetProposal Get one proposal
+	// (GET /api/proposals/{id})
+	GetProposal(ctx context.Context, request GetProposalRequestObject) (GetProposalResponseObject, error)
 	// CreateSession Log in (create a session)
 	// (POST /api/sessions)
 	CreateSession(ctx context.Context, request CreateSessionRequestObject) (CreateSessionResponseObject, error)
@@ -721,6 +978,63 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetHealthResponseObject); ok {
 		if err := validResponse.VisitGetHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateProposal operation middleware
+func (sh *strictHandler) CreateProposal(w http.ResponseWriter, r *http.Request) {
+	var request CreateProposalRequestObject
+
+	var body CreateProposalJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateProposal(ctx, request.(CreateProposalRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateProposal")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateProposalResponseObject); ok {
+		if err := validResponse.VisitCreateProposalResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetProposal operation middleware
+func (sh *strictHandler) GetProposal(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request GetProposalRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetProposal(ctx, request.(GetProposalRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetProposal")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetProposalResponseObject); ok {
+		if err := validResponse.VisitGetProposalResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

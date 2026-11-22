@@ -9,6 +9,7 @@ import (
 
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/account"
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/auth"
+	"github.com/brian-huanggg/esg-award-registration/backend/internal/proposal"
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/session"
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared"
 	"github.com/brian-huanggg/esg-award-registration/backend/internal/shared/api"
@@ -43,6 +44,7 @@ type server struct {
 	*shared.HealthHandler
 	*account.Handler
 	*auth.SessionHandler
+	*proposal.ProposalHandler
 }
 
 func newHandler(logger *slog.Logger, db *sql.DB) http.Handler {
@@ -57,11 +59,13 @@ func newHandler(logger *slog.Logger, db *sql.DB) http.Handler {
 	authMW := middleware.Authenticate(sessionRepo, logger, map[string]bool{
 		"GetCurrentAccount":    true,
 		"DeleteCurrentSession": true,
+		"CreateProposal":       true,
+		"GetProposal":          true,
 	})
 
 	mux := http.NewServeMux()
 	strict := api.NewStrictHandler(
-		server{&shared.HealthHandler{}, accountHandler, sessionHandler},
+		server{&shared.HealthHandler{}, accountHandler, sessionHandler, &proposal.ProposalHandler{}},
 		[]api.StrictMiddlewareFunc{authMW},
 	)
 	api.HandlerFromMux(strict, mux)
