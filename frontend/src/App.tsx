@@ -1,5 +1,7 @@
-import { Route, Routes } from 'react-router'
+import { Link, Route, Routes } from 'react-router'
 import Register from './pages/Register'
+import CreateProposal from './pages/CreateProposal'
+import ProposalDetail from './pages/ProposalDetail'
 import Login from './pages/Login'
 import RequireAuth from './auth/RequireAuth'
 import { useAuth } from './auth/context'
@@ -35,12 +37,15 @@ export default function App() {
       <Route path="/register" element={<Register />} />
       <Route path="/login" element={<Login />} />
       <Route element={<RequireAuth />}>
+        <Route path="/proposals/new" element={<CreateProposal />} />
+        <Route path="/proposals/:id" element={<ProposalDetail />} />
         <Route
           path="/"
           element={
             <>
               <h1>ESG Idea Contest v2</h1>
               <button onClick={() => void logout()}>Logout</button>
+              <Link to="/proposals/new">New proposal</Link>
               {health.kind === 'loading' && <p>Backend: loading...</p>}
               {health.kind === 'ok' && <p>Backend: {health.status}</p>}
               {health.kind === 'error' && (
