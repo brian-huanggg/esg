@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router'
 import Register from './Register'
 
 function mockJson(body: unknown, status: number) {
@@ -14,7 +15,11 @@ function mockJson(body: unknown, status: number) {
 }
 
 function fillAndSubmit(employeeId: string) {
-  render(<Register />)
+  render(
+    <MemoryRouter>
+      <Register />
+    </MemoryRouter>,
+  )
   fireEvent.change(screen.getByLabelText('Employee ID'), {
     target: { value: employeeId },
   })

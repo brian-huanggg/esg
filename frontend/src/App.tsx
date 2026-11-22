@@ -39,7 +39,7 @@ export default function App() {
           path="/"
           element={
             <>
-              <h1>ESG Idea Contest</h1>
+              <h1>ESG Idea Contest v2</h1>
               <button onClick={() => void logout()}>Logout</button>
               {health.kind === 'loading' && <p>Backend: loading...</p>}
               {health.kind === 'ok' && <p>Backend: {health.status}</p>}

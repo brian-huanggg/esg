@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { api } from '../api/client'
 import { useAuth } from '../auth/context'
 
@@ -54,6 +54,7 @@ export default function Login() {
       <button type="submit" disabled={submitting}>
         {submitting ? 'Logging in...' : 'Login'}
       </button>
+      <Link to="/register">Register</Link>
     </form>
   )
 }

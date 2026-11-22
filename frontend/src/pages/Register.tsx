@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { api } from '../api/client'
 
 type Status = 'idle' | 'submitting' | 'done'
@@ -97,6 +98,7 @@ export default function Register() {
       <button type="submit" disabled={status === 'submitting'}>
         {status === 'submitting' ? 'Submitting...' : 'Register'}
       </button>
+      <Link to="/login">Login</Link>
     </form>
   )
 }
