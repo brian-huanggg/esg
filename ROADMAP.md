@@ -9,8 +9,9 @@
   一定能在瀏覽器完整操作一個功能
 - **行數預算**：前期每步 30–80 行，後期每步 100–200 行
 - **越早做成本越低**：規格先行、JSON log、request-id、測試、覆蓋率、CI 都在 M1 就導入
-- **基礎設施先簡化**：單機 MariaDB。M4 第一次部署到 k3s，並用 Vault Secrets Operator
-  把機密從 Vault 同步成 K8s Secret；之後每個里程碑都走一次 GitOps 更新。Galera 放到 M11
+- **基礎設施先簡化**：本機用 compose 的單機 MariaDB。M4 第一次部署到 k3s，使用平台的共用 MariaDB，
+  並用 External Secrets Operator（ESO）把機密從 Vault 同步成 K8s Secret；之後每個里程碑都走一次 GitOps 更新。
+  平台的環境與慣例見 [`docs/Platform.md`](docs/Platform.md)
 - **細節逐步展開**：M0–M1 已經細到每一步。其餘里程碑先列大綱，做到前一個里程碑時再展開
 
 ## 進度怎麼看
@@ -43,10 +44,14 @@
 │       └── admin/           # 管理員功能
 ├── frontend/                # Vite + React + TS
 ├── deploy/
-│   ├── compose.yaml         # 本機開發用
-│   └── helm/esg/            # Helm chart（M4）
+│   └── compose.yaml         # 本機開發用
+├── docs/
+│   ├── PRD.md
+│   └── Platform.md          # 部署平台的上下文（M4 起）
 └── .github/workflows/       # GitHub Actions
 ```
+
+Helm chart 和 ArgoCD 設定**不在這個 repo**，在 platform-gitops 的 `apps/esg/`（見 `docs/Platform.md`）。
 
 ## 技術版本
 
@@ -60,7 +65,7 @@
 | 物件儲存 | MinIO |
 | 測試 | `go test`、testcontainers-go、Vitest + Testing Library |
 | CI | GitHub Actions |
-| 部署 | Docker（distroless）、Helm、ArgoCD、k3s、Harbor |
+| 部署 | Docker（distroless）、Helm、ArgoCD、k3s、Harbor、ESO + Vault JWT auth（平台既有，見 `docs/Platform.md`） |
 
 ## 每一步的格式
 
@@ -165,10 +170,14 @@
 ## M4 第一次部署（大綱，11 步）
 
 > 完成時：同一份程式跑在 k3s 上（HTTPS），改一行程式碼後，走一次完整的
-> build → push Harbor → 更新 values → ArgoCD sync。
-> 已決定：migration 用獨立 migrate image；k3s 已有 TLS；repo 為公開（ArgoCD 不需 deploy key）；
-> 機密由 Vault Secrets Operator（VSO）從 Vault 同步成 K8s Secret（VSO 已核准）。
-> 前提：k3s 內的 Vault 已安裝並 unseal；若還沒，4.6 前先加一步。
+> build → push Harbor → 更新 platform-gitops 的 tag → ArgoCD sync。
+> **平台上下文：先讀 [`docs/Platform.md`](docs/Platform.md)**（服務位址、三個 repo 的分工、命名、慣例、常見問題）。
+> 已決定：migration 用獨立 migrate image；chart 和 ArgoCD Application 放在 platform-gitops 的 `apps/esg/`，
+> 跟平台其他 app 一起管理（ESG repo 不放 chart）；使用平台的共用 MariaDB（`databases` namespace），
+> 不自己跑 StatefulSet；機密由平台既有的 ESO 經 Vault JWT auth（`auth/k3s`，role `eso-esg`）同步成 K8s Secret。
+> 為什麼不是 VSO：Vault 在另一個 GCP 專案，連不到 k3s API，所以 Vault 的 Kubernetes auth 不能用（見 `docs/Platform.md` §3）。
+> 平台現況：Vault（獨立 VM，已 unseal）、Harbor project `lab`、ArgoCD、ESO、`esg` namespace、
+> `apps/esg/secrets/`（`harbor-pull`）和 `apps/esg/frontend/` chart 都已存在。
 
 | 步驟 | 內容 | 驗收 |
 |---|---|---|
@@ -176,18 +185,26 @@
 | 4.2 | migrate image：`migrate/migrate` + `backend/migrations`（給 Job 用） | 對 compose 的 MariaDB 跑 `up` 成功 |
 | 4.3 | 前端 Dockerfile + `nginx.conf`（SPA fallback、`/api` 轉後端，同源） | 經 Nginx 打 `/api/health` 通 |
 | 4.4 | compose 全服務（migrate 跑完才啟動 backend） | **檢查點 1**：瀏覽器註冊、登入、登出 |
-| 4.5 | `make push`：tag 用 git short sha，推到 Harbor `lab`；`imagePullSecret` | Harbor 看得到三個 image |
-| 4.6 | Vault 端：KV 路徑、policy、Kubernetes auth role；用 Helm 安裝 VSO | VSO pod Running，CRD 存在 |
-| 4.7 | chart 骨架、backend、`VaultAuth` + `VaultStaticSecret` | VSO 自動產生 K8s Secret `esg-db` |
-| 4.8 | chart：MariaDB StatefulSet + PVC、migration Job | Job 完成，表都建好 |
-| 4.9 | chart：frontend、Ingress（TLS）；手動 `helm install` | **檢查點 2**：瀏覽器 HTTPS 註冊、登入 |
-| 4.10 | ArgoCD Application 指向 repo 的 chart，第一次 sync | Synced / Healthy |
-| 4.11 | GitOps 迴圈：改一行 → build → push → 更新 `values.yaml` tag → sync | 瀏覽器看到改動 |
+| 4.5 | `make push`：tag 用 git short sha、`--platform linux/amd64`，推到 `harbor.pf.internal/lab/esg-{backend,frontend,migrate}`；用 push robot 登入 Harbor | Harbor 看得到三個 image，架構是 amd64 |
+| 4.6 | 平台端（學習者以 Vault admin 執行）：`k3s-jwt-auth.sh <pubkeys.pem> app esg` 把 `eso-esg` 從 `pull-only` 改成 `app`；`vault kv put secret/k3s/esg/db username=esg password=-`；在共用 MariaDB 建 database `esg` 與帳號（platform-gitops 新增 `scripts/create-mariadb-esg.sh`，在 devbox 執行） | `vault policy read k3s-app-esg` 有 `secret/data/k3s/esg/*`；用 `esg` 帳號連得進 `esg` database |
+| 4.7 | platform-gitops：`apps/esg/secrets/externalsecret-db.yaml`（template 組出 `DB_*` 和 `DATABASE_URL`）；`apps/mariadb/policies/networkpolicy.yaml` 放行 `esg` namespace | ESO 產生 K8s Secret `esg-db`；`harbor-pull` 仍然正常 |
+| 4.8 | platform-gitops：`apps/esg/backend/` chart（Deployment、Service、PreSync migrate Job + `wait-for-db`），先用 `helm template` 檢查 | render 成功，沒有空的 image tag |
+| 4.9 | platform-gitops：frontend 加 `BACKEND_URL`、開 Ingress（`esg.apps.pf.internal`，`websecure` + `router.tls`） | `helm template` 成功；Ingress host 和 TLS annotation 正確 |
+| 4.10 | platform-gitops：`registry/esg-backend.yaml`（sync-wave 4）；push 後由 `root` 自動 sync | Synced / Healthy；migrate Job 完成、表都建好；**檢查點 2**：瀏覽器 HTTPS 註冊、登入 |
+| 4.11 | GitOps 迴圈：改一行 → `make push` → 改 `apps/esg/*/values-dev.yaml` 的 tag → push → sync | 瀏覽器看到改動；`.status.sync.revision` 是新 commit |
 
-- 順序：Docker → compose → Harbor → 手動 `helm install` → ArgoCD。手動先成功，ArgoCD 出錯時才分得出是 chart 還是 ArgoCD 的問題
-- 陷阱（4.8）：VSO 建立 Secret 是非同步的。migration Job 若用 `pre-install` hook，會比 `VaultStaticSecret` 先跑而失敗，
-  要改用 `post-install` 或 ArgoCD sync-wave；Pod 缺 Secret 時會卡在 `CreateContainerConfigError`，Secret 出現後自動重試
-- 陷阱（4.9）：Cookie 有 `Secure`，Ingress 必須走 HTTPS，否則登入後瀏覽器不帶 Cookie
+- 順序：Docker → compose → Harbor → 平台端機密與 DB → manifest（`helm template` 先驗）→ ArgoCD。
+  平台的叢集只由 ArgoCD 管理，不手動 `helm install`；4.8、4.9 用 `helm template` 在本機先驗 chart，
+  4.10 出錯時才分得出是 chart 還是 ArgoCD 的問題
+- 分工：ESG repo 做到 image 推進 Harbor 為止；`apps/esg/**` 和 `registry/esg-*` 在 platform-gitops 改；
+  Vault 和 DB 帳號由學習者以平台管理員身分執行。VM、網路、Harbor robot 屬於 devtools，不在 M4 範圍
+- 陷阱（4.6）：`project` 類型的 policy 只能讀 DB 路徑、讀不到 `harbor-pull`，改用它會讓 frontend 拉不到 image，所以用 `app` 類型
+- 陷阱（4.7）：ESO 建立 Secret 是非同步的。Pod 缺 Secret 時會卡在 `CreateContainerConfigError`，Secret 出現後自動重試；
+  `esg-secrets` 是 sync-wave 3，比 wave 4 的 app 先同步，但跨 Application 只保證最終一致
+- 陷阱（4.8）：migrate Job 太早連 MariaDB 會被 NetworkPolicy 拒絕（kube-router 還沒把 Pod IP 加進允許清單），要加 `wait-for-db`
+- 陷阱（4.9）：Cookie 有 `Secure`，Ingress 必須走 HTTPS，否則登入後瀏覽器不帶 Cookie。
+  `*.apps.pf.internal` 目前是 Traefik 預設憑證，第一次要在瀏覽器手動接受
+- 陷阱（4.11）：ArgoCD 不監看 Harbor，只有 Git 裡的 tag 改變才會部署
 - 對應：PRD「部署」；[distroless]、維運 3.2、3.3
 
 ## M5 提案 CRUD（大綱，約 12 步）
@@ -230,7 +247,7 @@
 
 - 狀態依 DB 時間即時推算（NOT OPEN / OPEN / CLOSED）
 - state 403；Admin 略過 state 檢查
-- Admin 帳號從 Vault 經 VSO 同步的 Secret 以環境變數注入，啟動時同步
+- Admin 帳號從 Vault 經 ESO 同步的 Secret 以環境變數注入，啟動時同步（Vault 路徑 `secret/k3s/esg/*`）
 - Admin 後台：所有提案、提案者，以及替他人建立和編輯
 - 前端：截止狀態顯示、Admin 頁面
 - 對應：PRD「截止時間」「Admin」；後端 2.2
@@ -256,11 +273,12 @@
 
 ## M11 CI 安全掃描與正式基礎設施（大綱，約 10 步）
 
-> 完成時：CI 包含四種安全掃描；資料庫換成 Galera。（Vault 與 VSO 已在 M4 完成）
+> 完成時：CI 包含四種安全掃描；CI 自動 push image 並更新 platform-gitops 的 tag。（Vault 與 ESO 已在 M4 完成）
 
 - GitHub Actions：Semgrep、Trivy（image）、gitleaks（secret）、相依套件掃描（Mend 或替代方案）
-- CI build image 並 push（方式見待決事項）；更新 Helm values，觸發 ArgoCD
-- MariaDB Galera（注意 k3s 單節點的資源）
+- CI build image 並 push（方式見待決事項）；更新 platform-gitops 的 `apps/esg/*/values-dev.yaml`，觸發 ArgoCD
+- MariaDB Galera：資料庫是平台共用的，換 Galera 屬於平台（platform-gitops / devtools）的工作，不在 ESG repo 做；
+  到 M11 時再決定要不要做（注意 k3s 單節點的資源）
 - 對應：PRD「CI」「部署」；資安 2.6；維運 1.3、2.3
 
 ## M12 效能驗收與加分功能（大綱，約 10 步）
@@ -278,6 +296,8 @@
 | MariaDB 版本 | 已決定：11.4 LTS（PRD 的 10.5 已 EOL） | 已決定 |
 | GitHub 認證 | 在 devbox 設定 GitHub 的 HTTPS credential | M1.10 前 |
 | CI 怎麼 push image | GHCR，或在 devbox 架 self-hosted runner push 到 Harbor | M11 |
-| ArgoCD 怎麼讀 repo | 已決定：repo 公開，不需 deploy key；仍需確認 k3s 能連到 github.com | 已決定 |
-| Vault 是否已安裝並 unseal | 已安裝就直接做 4.6；否則 4.6 前加一步 | M4.6 前 |
+| ArgoCD 怎麼讀 repo | 已決定：ArgoCD 只讀 platform-gitops（GitLab），不讀 ESG repo | 已決定 |
+| Vault 是否已安裝並 unseal | 已決定：Vault 是獨立 VM，已 unseal（KMS 自動 unseal） | 已決定 |
+| chart 放哪裡 | 已決定：platform-gitops `apps/esg/`，跟平台其他 app 統一管理 | 已決定 |
+| 資料庫 | 已決定：平台共用 MariaDB（`databases` namespace），不自己跑 StatefulSet | 已決定 |
 | 相依套件掃描 | Mend App，或 dependency-review-action / osv-scanner / Trivy | M11 |
