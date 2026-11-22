@@ -167,55 +167,61 @@ Helm chart 和 ArgoCD 設定**不在這個 repo**，在 platform-gitops 的 `app
 
 ---
 
-## M4 第一次部署（大綱，11 步）
+## M4 第一次部署（已完成）
 
-> 完成時：同一份程式跑在 k3s 上（HTTPS），改一行程式碼後，走一次完整的
-> build → push Harbor → 更新 platform-gitops 的 tag → ArgoCD sync。
-> **平台上下文：先讀 [`docs/Platform.md`](docs/Platform.md)**（服務位址、三個 repo 的分工、命名、慣例、常見問題）。
-> 已決定：migration 用獨立 migrate image；chart 和 ArgoCD Application 放在 platform-gitops 的 `apps/esg/`，
-> 跟平台其他 app 一起管理（ESG repo 不放 chart）；使用平台的共用 MariaDB（`databases` namespace），
-> 不自己跑 StatefulSet；機密由平台既有的 ESO 經 Vault JWT auth（`auth/k3s`，role `eso-esg`）同步成 K8s Secret。
-> 為什麼不是 VSO：Vault 在另一個 GCP 專案，連不到 k3s API，所以 Vault 的 Kubernetes auth 不能用（見 `docs/Platform.md` §3）。
-> 平台現況：Vault（獨立 VM，已 unseal）、Harbor project `lab`、ArgoCD、ESO、`esg` namespace、
-> `apps/esg/secrets/`（`harbor-pull`）和 `apps/esg/frontend/` chart 都已存在。
+> 完成時：同一份程式跑在 k3s 上（`https://esg.apps.pf.internal`），改一行程式碼後走完
+> build → push Harbor → 更新 platform-gitops 的 tag → ArgoCD sync。平台上下文見 [`docs/Platform.md`](docs/Platform.md)。
+> 已決定：獨立 migrate image（ArgoCD PreSync Job + `wait-for-db`）；chart 和 Application 放在 platform-gitops 的
+> `apps/esg/`（ESG repo 不放 chart）；用平台共用 MariaDB；機密由 ESO 經 Vault JWT auth（role `eso-esg`，`app` 類型 policy）同步成 K8s Secret。
+> 每一步的細節看 `notes/4.X-*.md` 和 tag `step-04-01`～`step-04-11`。
 
-| 步驟 | 內容 | 驗收 |
-|---|---|---|
-| 4.1 | 後端 Dockerfile：multi-stage + distroless nonroot、`.dockerignore` | `docker run` 後 `curl /api/health` 回 200 |
-| 4.2 | migrate image：`migrate/migrate` + `backend/migrations`（給 Job 用） | 對 compose 的 MariaDB 跑 `up` 成功 |
-| 4.3 | 前端 Dockerfile + `nginx.conf`（SPA fallback、`/api` 轉後端，同源） | 經 Nginx 打 `/api/health` 通 |
-| 4.4 | compose 全服務（migrate 跑完才啟動 backend） | **檢查點 1**：瀏覽器註冊、登入、登出 |
-| 4.5 | `make push`：tag 用 git short sha、`--platform linux/amd64`，推到 `harbor.pf.internal/lab/esg-{backend,frontend,migrate}`；用 push robot 登入 Harbor | Harbor 看得到三個 image，架構是 amd64 |
-| 4.6 | 平台端（學習者以 Vault admin 執行）：`k3s-jwt-auth.sh <pubkeys.pem> app esg` 把 `eso-esg` 從 `pull-only` 改成 `app`；`vault kv put secret/k3s/esg/db username=esg password=-`；在共用 MariaDB 建 database `esg` 與帳號（platform-gitops 新增 `scripts/create-mariadb-esg.sh`，在 devbox 執行） | `vault policy read k3s-app-esg` 有 `secret/data/k3s/esg/*`；用 `esg` 帳號連得進 `esg` database |
-| 4.7 | platform-gitops：`apps/esg/secrets/externalsecret-db.yaml`（template 組出 `DB_*` 和 `DATABASE_URL`）；`apps/mariadb/policies/networkpolicy.yaml` 放行 `esg` namespace | ESO 產生 K8s Secret `esg-db`；`harbor-pull` 仍然正常 |
-| 4.8 | platform-gitops：`apps/esg/backend/` chart（Deployment、Service、PreSync migrate Job + `wait-for-db`），先用 `helm template` 檢查 | render 成功，沒有空的 image tag |
-| 4.9 | platform-gitops：frontend 加 `BACKEND_URL`、開 Ingress（`esg.apps.pf.internal`，`websecure` + `router.tls`） | `helm template` 成功；Ingress host 和 TLS annotation 正確 |
-| 4.10 | platform-gitops：`registry/esg-backend.yaml`（sync-wave 4）；push 後由 `root` 自動 sync | Synced / Healthy；migrate Job 完成、表都建好；**檢查點 2**：瀏覽器 HTTPS 註冊、登入 |
-| 4.11 | GitOps 迴圈：改一行 → `make push` → 改 `apps/esg/*/values-dev.yaml` 的 tag → push → sync | 瀏覽器看到改動；`.status.sync.revision` 是新 commit |
+| 步驟 | 內容 |
+|---|---|
+| 4.1 | 後端 Dockerfile（multi-stage、distroless nonroot） |
+| 4.2 | migrate image（`migrate/migrate` + `backend/migrations`） |
+| 4.3 | 前端 Dockerfile + `nginx.conf`（SPA fallback、`/api` 轉後端） |
+| 4.4 | compose 全服務（migrate 完成才啟動 backend） |
+| 4.5 | `make push`：git short sha tag、`linux/amd64`、推到 Harbor `lab/esg-*` |
+| 4.6 | 平台端：Vault policy 改 `app`、`secret/k3s/esg/db`、共用 MariaDB 建 `esg` 帳號 |
+| 4.7 | platform-gitops：ExternalSecret `esg-db`、MariaDB NetworkPolicy 放行 `esg` |
+| 4.8 | platform-gitops：`apps/esg/backend/` chart（PreSync migrate Job） |
+| 4.9 | platform-gitops：frontend `BACKEND_URL`、HTTPS Ingress |
+| 4.10 | platform-gitops：`registry/esg-backend.yaml`，ArgoCD Synced / Healthy |
+| 4.11 | GitOps 迴圈：改程式 → `make push` → 改 `values-dev.yaml` tag → sync |
 
-- 順序：Docker → compose → Harbor → 平台端機密與 DB → manifest（`helm template` 先驗）→ ArgoCD。
-  平台的叢集只由 ArgoCD 管理，不手動 `helm install`；4.8、4.9 用 `helm template` 在本機先驗 chart，
-  4.10 出錯時才分得出是 chart 還是 ArgoCD 的問題
-- 分工：ESG repo 做到 image 推進 Harbor 為止；`apps/esg/**` 和 `registry/esg-*` 在 platform-gitops 改；
-  Vault 和 DB 帳號由學習者以平台管理員身分執行。VM、網路、Harbor robot 屬於 devtools，不在 M4 範圍
-- 陷阱（4.6）：`project` 類型的 policy 只能讀 DB 路徑、讀不到 `harbor-pull`，改用它會讓 frontend 拉不到 image，所以用 `app` 類型
-- 陷阱（4.7）：ESO 建立 Secret 是非同步的。Pod 缺 Secret 時會卡在 `CreateContainerConfigError`，Secret 出現後自動重試；
-  `esg-secrets` 是 sync-wave 3，比 wave 4 的 app 先同步，但跨 Application 只保證最終一致
-- 陷阱（4.8）：migrate Job 太早連 MariaDB 會被 NetworkPolicy 拒絕（kube-router 還沒把 Pod IP 加進允許清單），要加 `wait-for-db`
-- 陷阱（4.9）：Cookie 有 `Secure`，Ingress 必須走 HTTPS，否則登入後瀏覽器不帶 Cookie。
-  `*.apps.pf.internal` 目前是 Traefik 預設憑證，第一次要在瀏覽器手動接受
-- 陷阱（4.11）：ArgoCD 不監看 Harbor，只有 Git 裡的 tag 改變才會部署
-- 對應：PRD「部署」；[distroless]、維運 3.2、3.3
+- 之後每個里程碑的部署：`make push` → 改 platform-gitops `apps/esg/*/values-dev.yaml` 的 tag → push。
+  新 migration 由 PreSync Job 自動套用；ArgoCD 不監看 Harbor，只有 Git 裡的 tag 改變才會部署
 
-## M5 提案 CRUD（大綱，約 12 步）
+## M5 提案 CRUD（13 步，3 個垂直切片）
 
 > 完成時：在瀏覽器建立、列表、編輯、刪除提案；兩個分頁同時編輯時，會看到衝突提示。
+> 已決定：欄位是 `title`（1–100 字，同一 Leader 不可重複）和 `description`（最多 2000 字）；
+> M5 的 POST 用 JSON，M7 加簡報時改成 multipart；分頁用 offset（`page` / `page_size` + `total`）；
+> ETag 用 `version` 欄位。M5 只有 Leader 看得到自己的提案，擁有者條件直接寫進 SQL，查不到一律 404（M6 再擴充成 Leader 或 Member）。
+> 每個切片結束都有一個瀏覽器檢查點。
 
-- `proposals` 表、同一 Leader 的提案名稱 `UNIQUE`
-- 建立 / 讀取 / 整筆替換 / 刪除
-- 分頁（上限 100）、篩選、排序（排序要穩定）
-- ETag / If-Match：缺少 If-Match 回 428，版本不符回 412
-- 前端：列表頁、表單、分頁元件、412 衝突時的處理
+| 步驟 | 邊 | 內容 | 驗收 |
+|---|---|---|---|
+| **A** | | **建立與檢視** | |
+| 5.1 | 後 | migration `proposals`：雙 ID、`leader_account_id` FK、`version`、`UNIQUE(leader_account_id, title)` | `make migrate-up` / `down` 都成功 |
+| 5.2 | 規格 | `POST /api/proposals`、`GET /api/proposals/{id}`（回 `ETag`）、501 stub | `make gen` 一致，`make test` 通過 |
+| 5.3 | 後 | repository：Create、依擁有者取得、1062 轉成重複名稱錯誤 | 整合測試：別人的提案拿到 not found |
+| 5.4 | 後 | service + handler：422 / 409 / 201 + `ETag` + `Location`；`main.go` 接線 | `curl` 建立回 201、帶 `ETag`；別人的 id 回 404 |
+| 5.5 | 前 | 建立表單 + 詳情頁 | **檢查點 1**：瀏覽器建立提案並看到詳情 |
+| **B** | | **列表** | |
+| 5.6 | 規格+後 | `GET /api/proposals?page&page_size&sort&order&q`；repository：排序欄位白名單、`id` 當 tie-breaker、`LIKE` 跳脫、`COUNT` | 整合測試：同值排序穩定、`page_size` 上限 100 |
+| 5.7 | 後 | handler：預設值、參數驗證 422、回 `items` + `total` | `curl` 分頁、排序、搜尋結果正確 |
+| 5.8 | 前 | 列表頁 + 分頁元件，查詢條件放在 URL（`useSearchParams`） | **檢查點 2**：翻頁、排序、搜尋，重新整理後條件保留 |
+| **C** | | **編輯、刪除與樂觀鎖** | |
+| 5.9 | 規格 | `PUT` / `DELETE /api/proposals/{id}`：`If-Match` 必填，加上 428 / 412 | `make gen` 一致 |
+| 5.10 | 後 | repository：`UPDATE / DELETE … WHERE id=? AND version=?`，影響 0 列時分出 404 和 412 | 整合測試：舊版本更新失敗 |
+| 5.11 | 後 | handler：檢查順序 404 → 428 / 412 → 422 | `curl` 不帶 `If-Match` 回 428，舊 ETag 回 412 |
+| 5.12 | 前 | 編輯頁、刪除按鈕、412 衝突提示（重新載入最新版） | **檢查點 3**：兩個分頁同時編輯，後送出的看到衝突 |
+| 5.13 | 部署 | GitOps 更新（新 migration 由 PreSync Job 套用） | k3s 上 HTTPS 完成檢查點 1–3 |
+
+- 重用：repository、1062、`dbtest`、錯誤格式都跟 M2 一樣；service 很薄，跟 handler 合成一步
+- 陷阱（5.6）：`ORDER BY ?` 綁的是值，不是欄位名，所以排序只能用白名單 map 轉成欄位名
+- 陷阱（5.11）：428 / 412 排在 422 之前，所以要在驗證 body 之前就先檢查 `If-Match`
 - 對應：PRD「提案」；後端 2.2、2.5；前端 3.6
 
 ## M6 團隊與授權（大綱，約 8 步）
