@@ -1,0 +1,28 @@
+{
+  "name": "register-playground",
+  "version": "0.1.0",
+  "description": "ESG Idea Contest platform source: Go backend, React frontend, OpenAPI spec and deploy manifests",
+  "license": "MIT",
+  "author": "Brian Huang",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brian-huanggg/esg.git"
+  },
+  "files": [
+    "api/",
+    "backend/",
+    "frontend/",
+    "deploy/",
+    "docs/",
+    "Makefile",
+    "mise.toml",
+    ".env.example",
+    "!frontend/node_modules/",
+    "!frontend/dist/",
+    "!backend/coverage.out",
+    "!backend/coverage.html"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}
