@@ -1,9 +1,9 @@
 .PHONY: run-backend run-frontend test test-backend  cover-html test-frontend gen gen-backend gen-frontend db-up compose-up compose-down db-exec migrate-up migrate-down lint-frontend format-frontend push
 
-COVER_MIN ?= 80
-REGISTRY ?= harbor.pf.internal/lab
 # Image tag = git short sha, so a tag always maps back to one commit (never "latest").
 TAG ?= $(shell git rev-parse --short HEAD)
+COVER_MIN ?= 80
+REGISTRY ?= harbor.pf.internal/lab
 PLATFORM ?= linux/amd64
 COMPOSE = docker compose --env-file .env -f deploy/compose.yaml
 MIGRATE = set -a && . ./.env && set +a && \
