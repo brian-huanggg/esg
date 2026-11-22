@@ -1,4 +1,4 @@
-.PHONY: run-backend run-frontend test test-backend  cover-html test-frontend gen gen-backend gen-frontend db-up db-down db-exec migrate-up migrate-down lint-frontend format-frontend
+.PHONY: run-backend run-frontend test test-backend  cover-html test-frontend gen gen-backend gen-frontend db-up compose-up compose-down db-exec migrate-up migrate-down lint-frontend format-frontend
 
 COVER_MIN ?= 80
 COMPOSE = docker compose --env-file .env -f deploy/compose.yaml
@@ -36,9 +36,12 @@ gen-frontend:
 	cd frontend && npx openapi-typescript ../api/openapi.yaml -o src/api/schema.d.ts
 
 db-up:
-	$(COMPOSE) up -d --wait
+	$(COMPOSE) up -d --wait db
 
-db-down:
+compose-up:
+	$(COMPOSE) up -d --build --wait
+
+compose-down:
 	$(COMPOSE) down
 
 db-exec:
