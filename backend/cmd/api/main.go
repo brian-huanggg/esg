@@ -63,9 +63,12 @@ func newHandler(logger *slog.Logger, db *sql.DB) http.Handler {
 		"GetProposal":          true,
 	})
 
+	proposalRepo := proposal.NewRepository(db)
+	proposalHandler := proposal.NewHandler(proposal.NewService(proposalRepo), logger)
+
 	mux := http.NewServeMux()
 	strict := api.NewStrictHandler(
-		server{&shared.HealthHandler{}, accountHandler, sessionHandler, &proposal.ProposalHandler{}},
+		server{&shared.HealthHandler{}, accountHandler, sessionHandler, proposalHandler},
 		[]api.StrictMiddlewareFunc{authMW},
 	)
 	api.HandlerFromMux(strict, mux)
