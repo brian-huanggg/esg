@@ -1,6 +1,10 @@
-.PHONY: run-backend run-frontend test test-backend  cover-html test-frontend gen gen-backend gen-frontend db-up compose-up compose-down db-exec migrate-up migrate-down lint-frontend format-frontend
+.PHONY: run-backend run-frontend test test-backend  cover-html test-frontend gen gen-backend gen-frontend db-up compose-up compose-down db-exec migrate-up migrate-down lint-frontend format-frontend push
 
 COVER_MIN ?= 80
+REGISTRY ?= harbor.pf.internal/lab
+# Image tag = git short sha, so a tag always maps back to one commit (never "latest").
+TAG ?= $(shell git rev-parse --short HEAD)
+PLATFORM ?= linux/amd64
 COMPOSE = docker compose --env-file .env -f deploy/compose.yaml
 MIGRATE = set -a && . ./.env && set +a && \
 	migrate -path backend/migrations \
@@ -58,3 +62,10 @@ lint-frontend:
 
 format-frontend:
 	cd frontend && npx prettier --write .
+
+push:
+	@test -z "$$(git status --porcelain)" || { echo "FAIL: commit your changes first; the tag $(TAG) must match the pushed code"; exit 1; }
+	docker buildx build --platform $(PLATFORM) -t $(REGISTRY)/esg-backend:$(TAG) --push backend
+	docker buildx build --platform $(PLATFORM) -t $(REGISTRY)/esg-frontend:$(TAG) --push frontend
+	docker buildx build --platform $(PLATFORM) -f backend/Dockerfile.migrate -t $(REGISTRY)/esg-migrate:$(TAG) --push backend
+	@echo "pushed tag: $(TAG)"

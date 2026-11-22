@@ -1,5 +1,7 @@
 # --- Build stage: full Go toolchain, discarded after compiling ---
-FROM golang:1.26 AS build
+FROM --platform=$BUILDPLATFORM golang:1.26 AS build
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /src
 
 # Copy dependency manifests first so this layer is cached until go.mod/go.sum change.
@@ -8,7 +10,7 @@ RUN go mod download
 
 COPY . .
 # CGO_ENABLED=0 produces a static binary; distroless/static has no libc.
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api
 
 # --- Runtime stage: no shell, no package manager, runs as non-root ---
 FROM gcr.io/distroless/static-debian12:nonroot
